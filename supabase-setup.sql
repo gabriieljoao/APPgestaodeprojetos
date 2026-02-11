@@ -37,6 +37,8 @@ CREATE TABLE project_stages (
   completed_date DATE,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'skipped')),
   notes TEXT DEFAULT '',
+  client_review_start DATE,
+  client_review_end DATE,
   sort_order INT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now()
 );

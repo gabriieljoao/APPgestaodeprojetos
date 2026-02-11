@@ -191,15 +191,29 @@ const App = {
       html += `<div class="gantt-empty">Nenhum projeto encontrado</div>`;
     } else {
       filtered.forEach(p => {
-        // Estimated completion = last stage deadline (go-live or last with deadline)
+        // Estimated completion: last deadline + total client review days
         const stagesWithDeadline = (p.stages || []).filter(s => s.deadline && s.status !== 'skipped');
         const lastDeadline = stagesWithDeadline.length > 0 ? stagesWithDeadline[stagesWithDeadline.length - 1].deadline : null;
+        // Sum client review days across all stages
+        let clientDays = 0;
+        (p.stages || []).forEach(s => {
+          if (s.client_review_start) {
+            const end = s.client_review_end ? new Date(s.client_review_end) : new Date();
+            clientDays += Math.ceil((end - new Date(s.client_review_start)) / 86400000);
+          }
+        });
+        let estimateLabel = '';
+        if (lastDeadline) {
+          const adjusted = new Date(lastDeadline);
+          adjusted.setDate(adjusted.getDate() + clientDays);
+          estimateLabel = formatDate(adjusted.toISOString().split('T')[0]);
+        }
 
         html += `<div class="gantt-row" onclick="App.navigate('/projects/${p.id}')">
           <div class="gantt-label-col">
             <span>${p.name}</span>
             <span class="gantt-client">${p.client}</span>
-            ${lastDeadline ? `<span class="gantt-estimate">📅 Previsão: ${formatDate(lastDeadline)}</span>` : ''}
+            ${estimateLabel ? `<span class="gantt-estimate">📅 Previsão: ${estimateLabel}${clientDays > 0 ? ` <span style="font-size:10px;color:var(--warning)">(+${clientDays}d cliente)</span>` : ''}</span>` : ''}
           </div>
           <div class="gantt-stages-col">`;
         STAGE_DEFINITIONS.forEach(sd => {
@@ -452,6 +466,36 @@ const App = {
       await StageStore.update(stageId, { notes: document.getElementById('sn-notes')?.value || '' });
       UI.closeModal();
       UI.toast('Notas salvas!', 'success');
+      this.invalidateCache();
+      await this.route();
+    } catch (e) { UI.toast('Erro: ' + e.message, 'error'); }
+  },
+
+  editClientReview(stageId) {
+    const stage = this.cache._currentStages?.find(s => s.id === stageId);
+    if (!stage) return;
+    const def = getStageDefinition(stage.stage_key);
+    UI.openModal(`⏳ Aprovação do Cliente - ${def?.name || ''}`,
+      `<div class="form-group">
+        <label class="form-label">Data de envio ao cliente</label>
+        <input type="date" class="form-input" id="cr-start" value="${stage.client_review_start || ''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data de aprovação do cliente</label>
+        <input type="date" class="form-input" id="cr-end" value="${stage.client_review_end || ''}">
+      </div>`,
+      `<button class="btn btn-secondary" onclick="UI.closeModal()">Cancelar</button>
+       <button class="btn btn-primary" onclick="App.saveClientReview('${stageId}')">Salvar</button>`
+    );
+  },
+
+  async saveClientReview(stageId) {
+    try {
+      const reviewStart = document.getElementById('cr-start')?.value || null;
+      const reviewEnd = document.getElementById('cr-end')?.value || null;
+      await StageStore.update(stageId, { client_review_start: reviewStart, client_review_end: reviewEnd });
+      UI.closeModal();
+      UI.toast('Aprovação atualizada!', 'success');
       this.invalidateCache();
       await this.route();
     } catch (e) { UI.toast('Erro: ' + e.message, 'error'); }

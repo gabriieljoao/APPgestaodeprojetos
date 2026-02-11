@@ -224,9 +224,31 @@ const UI = {
           ${(personas || []).map(p => `<option value="${p.id}" ${stage.assigned_persona_id === p.id ? 'selected' : ''}>${p.name} (${p.role})</option>`).join('')}
         </select>
       </div>
+      <div class="sc-client-review" style="margin-top:10px;padding:10px 14px;background:var(--bg-base);border-radius:var(--radius-sm);border:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">⏳ Aprovação do Cliente</div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="font-size:12px;color:var(--text-secondary)">
+            ${stage.client_review_start ? `Enviado: <strong style="color:var(--text-primary)">${formatDate(stage.client_review_start)}</strong>` : '<span style="color:var(--text-muted)">Não enviado</span>'}
+          </div>
+          <div style="font-size:12px;color:var(--text-secondary)">
+            ${stage.client_review_end ? `Aprovado: <strong style="color:var(--success)">${formatDate(stage.client_review_end)}</strong>` : (stage.client_review_start ? '<span style="color:var(--warning)">Aguardando...</span>' : '')}
+          </div>
+          ${(() => {
+        if (stage.client_review_start && stage.client_review_end) {
+          const d = Math.ceil((new Date(stage.client_review_end) - new Date(stage.client_review_start)) / 86400000);
+          return '<span class="badge badge-paused" style="font-size:10px">' + d + ' dia(s) com cliente</span>';
+        } else if (stage.client_review_start && !stage.client_review_end) {
+          const d = Math.ceil((new Date() - new Date(stage.client_review_start)) / 86400000);
+          return '<span class="badge badge-overdue" style="font-size:10px">' + d + ' dia(s) aguardando</span>';
+        }
+        return '';
+      })()}
+        </div>
+      </div>
       ${stage.notes ? `<div style="margin-top:10px;font-size:12px;color:var(--text-muted);font-style:italic">"${stage.notes}"</div>` : ''}
       <div class="flex gap-8 mt-8">
         <button class="btn btn-ghost btn-sm" onclick="App.editStageDates('${stage.id}')">📅 Editar datas</button>
+        <button class="btn btn-ghost btn-sm" onclick="App.editClientReview('${stage.id}')">⏳ Aprovação cliente</button>
         <button class="btn btn-ghost btn-sm" onclick="App.editStageNotes('${stage.id}')">📝 Notas</button>
       </div>
     </div>`;
