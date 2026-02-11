@@ -5,7 +5,7 @@
 const App = {
   currentRoute: '/',
   cache: { projects: [], personas: [], alerts: [], _ts: 0 },
-  CACHE_TTL: 30000, // 30s cache
+  CACHE_TTL: 30000,
 
   async init() {
     window.addEventListener('hashchange', () => this.route());
@@ -37,7 +37,6 @@ const App = {
     }
   },
 
-  // Cached data loading - only fetch if stale
   async loadData(force = false) {
     const now = Date.now();
     if (!force && this.cache._ts && (now - this.cache._ts < this.CACHE_TTL)) {
@@ -52,7 +51,6 @@ const App = {
     return this.cache;
   },
 
-  // Invalidate cache after mutations
   invalidateCache() {
     this.cache._ts = 0;
   },
@@ -72,7 +70,6 @@ const App = {
       </div>`;
   },
 
-  // Show layout immediately with loading, then fill content
   renderLayoutFast(pageTitle, headerActions = '') {
     const alertCount = this.cache.alerts?.length || 0;
     document.getElementById('app').innerHTML = `
@@ -126,78 +123,104 @@ const App = {
     }
   },
 
-  // ========== DASHBOARD ==========
+  // ========== DASHBOARD (Tabbed: Kanban | Timeline) ==========
+  _dashboardTab: 'kanban',
+
   async pageDashboard() {
-    this.renderLayoutFast('Dashboard');
+    this.renderLayoutFast('Dashboard', `<button class="btn btn-primary" onclick="App.openNewProject()">+ Novo Projeto</button>`);
     const { projects, personas, alerts } = await this.loadData();
 
-    // Generate alerts in background (non-blocking)
+    // Generate alerts in background
     AlertStore.generateAlerts(projects).then(async () => {
       const fresh = await AlertStore.getActive();
       this.cache.alerts = fresh;
-      // Update badge count silently
       const badge = document.querySelector('.nav-badge');
       if (badge && fresh.length > 0) badge.textContent = fresh.length;
     }).catch(() => { });
 
-    const active = projects.filter(p => p.status === 'active');
-    const completed = projects.filter(p => p.status === 'completed');
-    let overdueCount = 0;
-    active.forEach(p => (p.stages || []).forEach(s => {
-      if (s.status !== 'completed' && s.status !== 'skipped' && s.deadline && daysUntilDeadline(s.deadline) < 0) overdueCount++;
-    }));
-
-    const insights = InsightsEngine.generate(projects);
-
     this.setContent(`
       <div class="animate-fade">
-        <div class="kpi-grid stagger">
-          <div class="kpi-card"><div class="kpi-icon" style="background:var(--info-bg);color:var(--info)">📂</div><div class="kpi-value">${projects.length}</div><div class="kpi-label">Total de Projetos</div></div>
-          <div class="kpi-card"><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">🚀</div><div class="kpi-value">${active.length}</div><div class="kpi-label">Projetos Ativos</div></div>
-          <div class="kpi-card"><div class="kpi-icon" style="background:rgba(139,92,246,0.12);color:var(--accent-violet)">✅</div><div class="kpi-value">${completed.length}</div><div class="kpi-label">Concluídos</div></div>
-          <div class="kpi-card"><div class="kpi-icon" style="background:var(--error-bg);color:var(--error)">⚠️</div><div class="kpi-value">${overdueCount}</div><div class="kpi-label">Etapas Atrasadas</div></div>
+        <div class="dash-tabs">
+          <button class="dash-tab ${this._dashboardTab === 'kanban' ? 'active' : ''}" onclick="App.switchDashboardTab('kanban')">📋 Kanban</button>
+          <button class="dash-tab ${this._dashboardTab === 'timeline' ? 'active' : ''}" onclick="App.switchDashboardTab('timeline')">📅 Timeline</button>
         </div>
-
-        <div class="charts-grid">
-          <div class="chart-card"><h3>Projetos por Etapa</h3><div style="height:260px"><canvas id="chart-stages"></canvas></div></div>
-          <div class="chart-card"><h3>Status dos Projetos</h3><div style="height:260px"><canvas id="chart-status"></canvas></div></div>
+        <div id="dash-view">
+          ${this._dashboardTab === 'kanban' ? this._renderKanban(projects) : this._renderGanttTimeline(projects)}
         </div>
-
-        ${alerts.length > 0 ? `
-        <div class="section-title">🔔 Alertas Ativos <span style="font-size:12px;font-weight:400;color:var(--text-muted)">(${alerts.length})</span>
-          <button class="btn btn-ghost btn-sm ml-auto" onclick="App.dismissAllAlerts()">Limpar todos</button>
-        </div>
-        <div class="alerts-list mb-24">${alerts.slice(0, 8).map(a => UI.renderAlertItem(a)).join('')}</div>
-        ` : ''}
-
-        ${insights.length > 0 ? `
-        <div class="section-title">💡 Insights</div>
-        <div class="insights-grid stagger">${insights.map(i => UI.renderInsightCard(i)).join('')}</div>
-        ` : ''}
       </div>
     `);
-
-    setTimeout(() => {
-      Charts.projectsByStage('chart-stages', projects);
-      Charts.projectStatus('chart-status', projects);
-    }, 50);
   },
 
-  // ========== PROJECTS PAGE ==========
-  async pageProjects() {
-    const view = localStorage.getItem('projects_view') || 'kanban';
-    this.renderLayoutFast('Projetos', `<button class="btn btn-primary" onclick="App.openNewProject()">+ Novo Projeto</button>`);
-    const { projects } = await this.loadData();
+  switchDashboardTab(tab) {
+    this._dashboardTab = tab;
+    // Update tab buttons
+    document.querySelectorAll('.dash-tab').forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`.dash-tab[onclick*="'${tab}'"]`)?.classList.add('active');
+    // Swap view content
+    const view = document.getElementById('dash-view');
+    if (view) {
+      const { projects } = this.cache;
+      view.innerHTML = tab === 'kanban' ? this._renderKanban(projects) : this._renderGanttTimeline(projects);
+    }
+  },
 
-    this.setContent(`<div class="animate-fade">
-      <div class="flex items-center justify-between mb-24">
-        <div class="tabs">
-          <button class="tab ${view === 'kanban' ? 'active' : ''}" onclick="localStorage.setItem('projects_view','kanban');App.pageProjects()">Kanban</button>
-          <button class="tab ${view === 'list' ? 'active' : ''}" onclick="localStorage.setItem('projects_view','list');App.pageProjects()">Lista</button>
+  _renderGanttTimeline(projects, filterProjectId = '') {
+    const filtered = filterProjectId ? projects.filter(p => p.id === filterProjectId) : projects;
+
+    let html = `<div class="gantt-container">
+      <div class="gantt-toolbar">
+        <h3>📅 Timeline de Projetos</h3>
+        <div class="gantt-filter">
+          <label>Filtrar por projeto:</label>
+          <select id="gantt-project-filter" onchange="App.filterTimeline(this.value)">
+            <option value="">Todos os projetos</option>
+            ${projects.map(p => `<option value="${p.id}" ${p.id === filterProjectId ? 'selected' : ''}>${p.name} — ${p.client}</option>`).join('')}
+          </select>
         </div>
       </div>
-      <div id="projects-view">${view === 'kanban' ? this._renderKanban(projects) : this._renderProjectList(projects)}</div>
-    </div>`);
+      <div class="gantt-scroll">
+        <div class="gantt-table">
+          <div class="gantt-header-row">
+            <div class="gantt-label-col">Projeto</div>
+            <div class="gantt-stages-col">
+              ${STAGE_DEFINITIONS.map(sd => `<div class="gantt-stage-header" style="color:${sd.color}">${sd.name}</div>`).join('')}
+            </div>
+          </div>`;
+
+    if (filtered.length === 0) {
+      html += `<div class="gantt-empty">Nenhum projeto encontrado</div>`;
+    } else {
+      filtered.forEach(p => {
+        // Estimated completion = last stage deadline (go-live or last with deadline)
+        const stagesWithDeadline = (p.stages || []).filter(s => s.deadline && s.status !== 'skipped');
+        const lastDeadline = stagesWithDeadline.length > 0 ? stagesWithDeadline[stagesWithDeadline.length - 1].deadline : null;
+
+        html += `<div class="gantt-row" onclick="App.navigate('/projects/${p.id}')">
+          <div class="gantt-label-col">
+            <span>${p.name}</span>
+            <span class="gantt-client">${p.client}</span>
+            ${lastDeadline ? `<span class="gantt-estimate">📅 Previsão: ${formatDate(lastDeadline)}</span>` : ''}
+          </div>
+          <div class="gantt-stages-col">`;
+        STAGE_DEFINITIONS.forEach(sd => {
+          const stage = (p.stages || []).find(s => s.stage_key === sd.key);
+          const status = stage ? stage.status : 'pending';
+          html += `<div class="gantt-cell"><div class="gantt-bar ${status}" style="background:${sd.color}" title="${sd.name}: ${STATUS_LABELS[status] || status}"></div></div>`;
+        });
+        html += `</div></div>`;
+      });
+    }
+
+    html += `</div></div></div>`;
+    return html;
+  },
+
+  filterTimeline(projectId) {
+    const { projects } = this.cache;
+    const container = document.querySelector('.gantt-container');
+    if (container) {
+      container.outerHTML = this._renderGanttTimeline(projects, projectId);
+    }
   },
 
   _renderKanban(projects) {
@@ -226,9 +249,16 @@ const App = {
     return html;
   },
 
-  _renderProjectList(projects) {
-    if (projects.length === 0) return UI.emptyState('📂', 'Nenhum projeto', 'Crie seu primeiro projeto para começar!', '<button class="btn btn-primary" onclick="App.openNewProject()">+ Novo Projeto</button>');
-    return `<div style="display:grid;gap:12px" class="stagger">${projects.map(p => UI.renderProjectCard(p)).join('')}</div>`;
+  // ========== PROJECTS PAGE (All projects list + CRUD) ==========
+  async pageProjects() {
+    this.renderLayoutFast('Projetos', `<button class="btn btn-primary" onclick="App.openNewProject()">+ Novo Projeto</button>`);
+    const { projects } = await this.loadData();
+
+    this.setContent(`<div class="animate-fade">
+      ${projects.length > 0
+        ? `<div style="display:grid;gap:12px" class="stagger">${projects.map(p => UI.renderProjectCard(p)).join('')}</div>`
+        : UI.emptyState('📂', 'Nenhum projeto', 'Crie seu primeiro projeto para começar!', '<button class="btn btn-primary" onclick="App.openNewProject()">+ Novo Projeto</button>')}
+    </div>`);
   },
 
   // ========== NEW / EDIT PROJECT ==========
@@ -244,8 +274,7 @@ const App = {
     UI.openModal('Novo Projeto', `
       <div class="form-row"><div class="form-group"><label class="form-label">Nome do Projeto</label><input type="text" class="form-input" id="np-name" placeholder="ex: Site Empresa XYZ"></div>
       <div class="form-group"><label class="form-label">Cliente</label><input type="text" class="form-input" id="np-client" placeholder="Nome do cliente"></div></div>
-      <div class="form-row"><div class="form-group"><label class="form-label">Data do Contrato</label><input type="date" class="form-input" id="np-contract"></div>
-      <div class="form-group"><label class="form-label">Prioridade</label><select class="form-select" id="np-priority"><option value="low">Baixa</option><option value="medium" selected>Média</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></div></div>
+      <div class="form-group"><label class="form-label">Data do Contrato</label><input type="date" class="form-input" id="np-contract"></div>
       <div class="form-group"><label class="form-label">Observações</label><textarea class="form-textarea" id="np-notes" placeholder="Detalhes do projeto..."></textarea></div>
       <div style="margin-top:16px"><div class="form-label" style="margin-bottom:12px">Prazos por Etapa</div>${stageRows}</div>`,
       `<button class="btn btn-secondary" onclick="UI.closeModal()">Cancelar</button>
@@ -263,7 +292,7 @@ const App = {
       const project = await ProjectStore.create({
         name, client,
         contract_date: document.getElementById('np-contract')?.value || null,
-        priority: document.getElementById('np-priority')?.value || 'medium',
+        priority: 'medium',
         notes: document.getElementById('np-notes')?.value || '',
         status: 'active'
       });
@@ -303,7 +332,6 @@ const App = {
     this.cache._currentProject = project;
     this.cache._currentStages = stages;
 
-    // Update header
     const h2 = document.querySelector('.main-header h2');
     if (h2) h2.textContent = `Projeto: ${project.name}`;
 
@@ -314,7 +342,6 @@ const App = {
             <p class="page-subtitle" style="margin-bottom:0">Cliente: ${project.client} · Contrato: ${formatDate(project.contract_date)}</p>
           </div>
           <div class="flex gap-8">
-            <span class="badge badge-${project.priority}">${PRIORITY_LABELS[project.priority]}</span>
             <select class="form-select" style="width:auto;padding:6px 12px;font-size:12px" onchange="App.updateProjectStatus('${id}', this.value)">
               <option value="active" ${project.status === 'active' ? 'selected' : ''}>Ativo</option>
               <option value="paused" ${project.status === 'paused' ? 'selected' : ''}>Pausado</option>
@@ -470,9 +497,9 @@ const App = {
     }
   },
 
-  // ========== PERSONAS ==========
+  // ========== EQUIPE (formerly Personas) ==========
   async pagePersonas() {
-    this.renderLayoutFast('Personas', `<button class="btn btn-primary" onclick="App.openNewPersona()">+ Nova Persona</button>`);
+    this.renderLayoutFast('Equipe', `<button class="btn btn-primary" onclick="App.openNewPersona()">+ Novo Membro</button>`);
     const { personas, projects } = await this.loadData();
     const personaCounts = {};
     personas.forEach(p => { personaCounts[p.id] = 0; });
@@ -481,13 +508,13 @@ const App = {
     this.setContent(`
       <div class="animate-fade">
         ${personas.length > 0 ? `<div class="persona-grid stagger">${personas.map(p => UI.renderPersonaCard(p, personaCounts[p.id] || 0)).join('')}</div>`
-        : UI.emptyState('👤', 'Nenhuma persona', 'Cadastre personas para atribuí-las às etapas dos projetos.', '<button class="btn btn-primary" onclick="App.openNewPersona()">+ Nova Persona</button>')}
+        : UI.emptyState('👤', 'Nenhum membro na equipe', 'Cadastre membros da equipe para atribuí-los às etapas dos projetos.', '<button class="btn btn-primary" onclick="App.openNewPersona()">+ Novo Membro</button>')}
       </div>`);
   },
 
   openNewPersona() {
     const colors = ['#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899', '#3b82f6', '#10b981', '#f97316', '#ef4444', '#14b8a6', '#a855f7'];
-    UI.openModal('Nova Persona', `
+    UI.openModal('Novo Membro da Equipe', `
       <div class="form-group"><label class="form-label">Nome</label><input type="text" class="form-input" id="pp-name" placeholder="Nome completo"></div>
       <div class="form-row"><div class="form-group"><label class="form-label">Função</label><input type="text" class="form-input" id="pp-role" placeholder="ex: Designer, Copywriter, Dev"></div>
       <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="pp-email" placeholder="email@exemplo.com"></div></div>
@@ -504,7 +531,7 @@ const App = {
     try {
       await PersonaStore.create({ name, role, email: document.getElementById('pp-email')?.value.trim() || null, color: document.getElementById('pp-color')?.value || '#8b5cf6' });
       UI.closeModal();
-      UI.toast('Persona criada!', 'success');
+      UI.toast('Membro adicionado!', 'success');
       this.invalidateCache();
       await this.route();
     } catch (e) { UI.toast('Erro: ' + e.message, 'error'); }
@@ -512,7 +539,7 @@ const App = {
 
   async editPersona(id) {
     const persona = this.cache.personas?.find(p => p.id === id) || await PersonaStore.getById(id);
-    UI.openModal('Editar Persona', `
+    UI.openModal('Editar Membro', `
       <div class="form-group"><label class="form-label">Nome</label><input type="text" class="form-input" id="ep2-name" value="${persona.name}"></div>
       <div class="form-row"><div class="form-group"><label class="form-label">Função</label><input type="text" class="form-input" id="ep2-role" value="${persona.role}"></div>
       <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="ep2-email" value="${persona.email || ''}"></div></div>`,
@@ -529,15 +556,15 @@ const App = {
         email: document.getElementById('ep2-email')?.value.trim() || null
       });
       UI.closeModal();
-      UI.toast('Persona atualizada!', 'success');
+      UI.toast('Membro atualizado!', 'success');
       this.invalidateCache();
       await this.route();
     } catch (e) { UI.toast('Erro: ' + e.message, 'error'); }
   },
 
   async deletePersona(id) {
-    if (await UI.confirm('Excluir esta persona? Ela será desvinculada de todas as etapas.')) {
-      try { await PersonaStore.delete(id); UI.toast('Persona excluída', 'success'); this.invalidateCache(); await this.route(); }
+    if (await UI.confirm('Excluir este membro? Ele será desvinculado de todas as etapas.')) {
+      try { await PersonaStore.delete(id); UI.toast('Membro excluído', 'success'); this.invalidateCache(); await this.route(); }
       catch (e) { UI.toast('Erro: ' + e.message, 'error'); }
     }
   },
@@ -552,7 +579,7 @@ const App = {
       <div class="animate-fade">
         <div class="charts-grid">
           <div class="chart-card"><h3>Eficiência de Prazos (Estimado vs Real)</h3><div style="height:280px"><canvas id="chart-efficiency"></canvas></div></div>
-          <div class="chart-card"><h3>Carga de Trabalho por Persona</h3><div style="height:280px"><canvas id="chart-workload"></canvas></div></div>
+          <div class="chart-card"><h3>Carga de Trabalho por Membro</h3><div style="height:280px"><canvas id="chart-workload"></canvas></div></div>
           <div class="chart-card"><h3>Tendência de Conclusão</h3><div style="height:280px"><canvas id="chart-trend"></canvas></div></div>
           <div class="chart-card"><h3>Projetos por Etapa Atual</h3><div style="height:280px"><canvas id="chart-stages2"></canvas></div></div>
         </div>
@@ -598,7 +625,7 @@ const App = {
   },
 
   async clearAllData() {
-    if (await UI.confirm('Limpar todos os alertas? Os projetos e personas não serão afetados.')) {
+    if (await UI.confirm('Limpar todos os alertas? Os projetos e equipe não serão afetados.')) {
       try { await AlertStore.dismissAll(); UI.toast('Alertas limpos!', 'success'); this.invalidateCache(); }
       catch (e) { UI.toast('Erro: ' + e.message, 'error'); }
     }

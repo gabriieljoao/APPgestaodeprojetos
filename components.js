@@ -3,33 +3,33 @@
    ========================================== */
 
 const UI = {
-    // Toast notifications
-    toast(message, type = 'info') {
-        let container = document.getElementById('toast-container');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'toast-container';
-            container.className = 'toast-container';
-            document.body.appendChild(container);
-        }
-        const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.innerHTML = `<span>${icons[type] || 'ℹ'}</span><span>${message}</span>`;
-        container.appendChild(toast);
-        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(20px)'; setTimeout(() => toast.remove(), 300); }, 4000);
-    },
+  // Toast notifications
+  toast(message, type = 'info') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<span>${icons[type] || 'ℹ'}</span><span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(20px)'; setTimeout(() => toast.remove(), 300); }, 4000);
+  },
 
-    // Modal
-    openModal(title, bodyHtml, footerHtml, options = {}) {
-        let overlay = document.getElementById('modal-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'modal-overlay';
-            overlay.className = 'modal-overlay';
-            document.body.appendChild(overlay);
-        }
-        overlay.innerHTML = `
+  // Modal
+  openModal(title, bodyHtml, footerHtml, options = {}) {
+    let overlay = document.getElementById('modal-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'modal-overlay';
+      overlay.className = 'modal-overlay';
+      document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
       <div class="modal" style="${options.maxWidth ? 'max-width:' + options.maxWidth : ''}">
         <div class="modal-header">
           <h3>${title}</h3>
@@ -39,29 +39,29 @@ const UI = {
         ${footerHtml ? `<div class="modal-footer">${footerHtml}</div>` : ''}
       </div>
     `;
-        overlay.onclick = (e) => { if (e.target === overlay) UI.closeModal(); };
-        requestAnimationFrame(() => overlay.classList.add('active'));
-    },
+    overlay.onclick = (e) => { if (e.target === overlay) UI.closeModal(); };
+    requestAnimationFrame(() => overlay.classList.add('active'));
+  },
 
-    closeModal() {
-        const overlay = document.getElementById('modal-overlay');
-        if (overlay) { overlay.classList.remove('active'); setTimeout(() => overlay.remove(), 300); }
-    },
+  closeModal() {
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) { overlay.classList.remove('active'); setTimeout(() => overlay.remove(), 300); }
+  },
 
-    // Confirm dialog
-    confirm(message) {
-        return new Promise(resolve => {
-            this.openModal('Confirmar', `<p style="font-size:14px;color:var(--text-secondary)">${message}</p>`,
-                `<button class="btn btn-secondary" onclick="UI.closeModal(); UI._confirmResolve(false)">Cancelar</button>
+  // Confirm dialog
+  confirm(message) {
+    return new Promise(resolve => {
+      this.openModal('Confirmar', `<p style="font-size:14px;color:var(--text-secondary)">${message}</p>`,
+        `<button class="btn btn-secondary" onclick="UI.closeModal(); UI._confirmResolve(false)">Cancelar</button>
          <button class="btn btn-danger" onclick="UI.closeModal(); UI._confirmResolve(true)">Confirmar</button>`
-            );
-            UI._confirmResolve = resolve;
-        });
-    },
+      );
+      UI._confirmResolve = resolve;
+    });
+  },
 
-    // Sidebar
-    renderSidebar(currentRoute, alertCount) {
-        return `
+  // Sidebar
+  renderSidebar(currentRoute, alertCount) {
+    return `
     <div class="sidebar" id="sidebar">
       <div class="sidebar-logo">
         <div class="logo-icon">G</div>
@@ -84,7 +84,7 @@ const UI = {
           </button>
           <button class="nav-item ${currentRoute === '/personas' ? 'active' : ''}" onclick="App.navigate('/personas')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-            Personas
+            Equipe
           </button>
           <button class="nav-item ${currentRoute === '/analytics' ? 'active' : ''}" onclick="App.navigate('/analytics')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
@@ -103,21 +103,21 @@ const UI = {
         <div style="font-size:11px;color:var(--text-muted)">📅 ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
       </div>
     </div>`;
-    },
+  },
 
-    // Project card for list view
-    renderProjectCard(project) {
-        const progress = getProjectProgress(project.stages);
-        const current = getCurrentStage(project.stages);
-        const currentDef = current ? getStageDefinition(current.stage_key) : null;
-        const deadlineDays = current ? daysUntilDeadline(current.deadline) : null;
-        let deadlineClass = '';
-        if (deadlineDays !== null) {
-            if (deadlineDays < 0) deadlineClass = 'overdue';
-            else if (deadlineDays <= 3) deadlineClass = 'soon';
-        }
+  // Project card for list view
+  renderProjectCard(project) {
+    const progress = getProjectProgress(project.stages);
+    const current = getCurrentStage(project.stages);
+    const currentDef = current ? getStageDefinition(current.stage_key) : null;
+    const deadlineDays = current ? daysUntilDeadline(current.deadline) : null;
+    let deadlineClass = '';
+    if (deadlineDays !== null) {
+      if (deadlineDays < 0) deadlineClass = 'overdue';
+      else if (deadlineDays <= 3) deadlineClass = 'soon';
+    }
 
-        return `
+    return `
     <div class="card clickable" onclick="App.navigate('/projects/${project.id}')" style="cursor:pointer">
       <div class="flex items-center justify-between mb-16">
         <div>
@@ -141,18 +141,18 @@ const UI = {
       <div class="progress-bar"><div class="progress-fill" style="width:${progress}%"></div></div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:6px">${progress}% concluído</div>
     </div>`;
-    },
+  },
 
-    // Kanban card
-    renderKanbanCard(project, stage) {
-        const deadlineDays = daysUntilDeadline(stage.deadline);
-        let deadlineClass = '';
-        if (deadlineDays !== null) {
-            if (deadlineDays < 0) deadlineClass = 'overdue';
-            else if (deadlineDays <= 3) deadlineClass = 'soon';
-        }
+  // Kanban card
+  renderKanbanCard(project, stage) {
+    const deadlineDays = daysUntilDeadline(stage.deadline);
+    let deadlineClass = '';
+    if (deadlineDays !== null) {
+      if (deadlineDays < 0) deadlineClass = 'overdue';
+      else if (deadlineDays <= 3) deadlineClass = 'soon';
+    }
 
-        return `
+    return `
     <div class="kanban-card" draggable="true" data-project-id="${project.id}" data-stage-id="${stage.id}" onclick="App.navigate('/projects/${project.id}')">
       <div class="kc-title">${project.name}</div>
       <div class="kc-client">${project.client}</div>
@@ -161,41 +161,41 @@ const UI = {
         ${stage.deadline ? `<div class="kc-deadline ${deadlineClass}">📅 ${formatDate(stage.deadline)}</div>` : ''}
       </div>
     </div>`;
-    },
+  },
 
-    // Stage timeline for project detail
-    renderTimeline(stages) {
-        let html = '<div class="timeline-track">';
-        stages.forEach((stage, i) => {
-            const def = getStageDefinition(stage.stage_key);
-            if (!def) return;
-            html += `
+  // Stage timeline for project detail
+  renderTimeline(stages) {
+    let html = '<div class="timeline-track">';
+    stages.forEach((stage, i) => {
+      const def = getStageDefinition(stage.stage_key);
+      if (!def) return;
+      html += `
         <div class="timeline-step ${stage.status}" data-stage-id="${stage.id}">
           <div class="step-dot" style="${stage.status === 'completed' ? '' : stage.status === 'in_progress' ? `border-color:${def.color};color:${def.color}` : ''}">${stage.status === 'completed' ? '✓' : def.icon}</div>
           <div class="step-label">${def.name}</div>
           <div class="step-date">${stage.status === 'completed' ? formatDate(stage.completed_date) : stage.deadline ? formatDate(stage.deadline) : '—'}</div>
         </div>`;
-            if (i < stages.length - 1) {
-                const nextCompleted = stages[i + 1]?.status === 'completed';
-                html += `<div class="timeline-connector ${stage.status === 'completed' && nextCompleted ? 'completed' : ''}"></div>`;
-            }
-        });
-        html += '</div>';
-        return html;
-    },
+      if (i < stages.length - 1) {
+        const nextCompleted = stages[i + 1]?.status === 'completed';
+        html += `<div class="timeline-connector ${stage.status === 'completed' && nextCompleted ? 'completed' : ''}"></div>`;
+      }
+    });
+    html += '</div>';
+    return html;
+  },
 
-    // Stage detail card
-    renderStageCard(stage, personas) {
-        const def = getStageDefinition(stage.stage_key);
-        if (!def) return '';
-        const deadlineDays = daysUntilDeadline(stage.deadline);
-        let deadlineInfo = '';
-        if (stage.status !== 'completed' && stage.status !== 'skipped' && deadlineDays !== null) {
-            if (deadlineDays < 0) deadlineInfo = `<span class="badge badge-overdue">⚠ ${Math.abs(deadlineDays)}d atrasado</span>`;
-            else if (deadlineDays <= 3) deadlineInfo = `<span class="badge badge-high">📅 ${deadlineDays}d restantes</span>`;
-        }
+  // Stage detail card
+  renderStageCard(stage, personas) {
+    const def = getStageDefinition(stage.stage_key);
+    if (!def) return '';
+    const deadlineDays = daysUntilDeadline(stage.deadline);
+    let deadlineInfo = '';
+    if (stage.status !== 'completed' && stage.status !== 'skipped' && deadlineDays !== null) {
+      if (deadlineDays < 0) deadlineInfo = `<span class="badge badge-overdue">⚠ ${Math.abs(deadlineDays)}d atrasado</span>`;
+      else if (deadlineDays <= 3) deadlineInfo = `<span class="badge badge-high">📅 ${deadlineDays}d restantes</span>`;
+    }
 
-        return `
+    return `
     <div class="stage-card" style="border-left-color:${def.color}" id="stage-${stage.id}">
       <div class="sc-header">
         <div class="sc-title"><span class="stage-dot" style="background:${def.color}"></span>${def.icon} ${def.name}</div>
@@ -230,11 +230,11 @@ const UI = {
         <button class="btn btn-ghost btn-sm" onclick="App.editStageNotes('${stage.id}')">📝 Notas</button>
       </div>
     </div>`;
-    },
+  },
 
-    // Persona card
-    renderPersonaCard(persona, projectCount) {
-        return `
+  // Persona card
+  renderPersonaCard(persona, projectCount) {
+    return `
     <div class="persona-card">
       <div class="persona-avatar" style="background:${persona.color || '#8b5cf6'}">${getInitials(persona.name)}</div>
       <div class="pc-name">${persona.name}</div>
@@ -246,22 +246,22 @@ const UI = {
         <button class="btn btn-ghost btn-sm" onclick="App.deletePersona('${persona.id}')">🗑️ Excluir</button>
       </div>
     </div>`;
-    },
+  },
 
-    // Alert item
-    renderAlertItem(alert) {
-        return `
+  // Alert item
+  renderAlertItem(alert) {
+    return `
     <div class="alert-item animate-slide-up">
       <div class="alert-dot ${alert.type}"></div>
       <div class="alert-text">${alert.message}</div>
       <div class="alert-date">${formatDate(alert.alert_date)}</div>
       <button class="alert-dismiss btn btn-icon btn-ghost btn-sm" onclick="App.dismissAlert('${alert.id}')">✕</button>
     </div>`;
-    },
+  },
 
-    // Insight card
-    renderInsightCard(insight) {
-        return `
+  // Insight card
+  renderInsightCard(insight) {
+    return `
     <div class="insight-card insight-${insight.type}">
       <div class="insight-icon">${insight.icon}</div>
       <div class="insight-content">
@@ -269,19 +269,19 @@ const UI = {
         <p>${insight.text}</p>
       </div>
     </div>`;
-    },
+  },
 
-    // Loading spinner
-    loading() { return '<div class="loading-spinner"></div>'; },
+  // Loading spinner
+  loading() { return '<div class="loading-spinner"></div>'; },
 
-    // Empty state
-    emptyState(icon, title, message, actionHtml) {
-        return `
+  // Empty state
+  emptyState(icon, title, message, actionHtml) {
+    return `
     <div class="empty-state">
       <div class="empty-icon">${icon}</div>
       <h3>${title}</h3>
       <p>${message}</p>
       ${actionHtml || ''}
     </div>`;
-    }
+  }
 };
