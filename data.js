@@ -211,16 +211,33 @@ const AlertStore = {
             alert_date: today.toISOString().split('T')[0]
           });
         }
-      }
+      });
     }
 
-    // Clear old auto-generated alerts for today and re-create
-    const todayStr = today.toISOString().split('T')[0];
-    await sb().from('alerts').delete().eq('alert_date', todayStr).in('type', ['overdue', 'deadline_warning']);
-    if (newAlerts.length > 0) {
-      await sb().from('alerts').insert(newAlerts);
+    // Check for client delay
+    if (stage.client_review_start && !stage.client_review_end) {
+      const start = new Date(stage.client_review_start + 'T00:00:00');
+      const daysInReview = Math.floor((today - start) / (1000 * 60 * 60 * 24));
+      if (daysInReview > 2) {
+        newAlerts.push({
+          project_id: proj.id,
+          stage_key: stage.stage_key,
+          type: 'client_delay',
+          message: `${proj.name}: etapa "${stageName}" aguarda cliente há ${daysInReview} dias.`,
+          alert_date: today.toISOString().split('T')[0]
+        });
+      }
     }
-    return newAlerts;
+  }
+}
+
+// Clear old auto-generated alerts for today and re-create
+const todayStr = today.toISOString().split('T')[0];
+await sb().from('alerts').delete().eq('alert_date', todayStr).in('type', ['overdue', 'deadline_warning']);
+if (newAlerts.length > 0) {
+  await sb().from('alerts').insert(newAlerts);
+}
+return newAlerts;
   }
 };
 
