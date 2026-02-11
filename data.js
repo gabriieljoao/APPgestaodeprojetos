@@ -188,56 +188,57 @@ const AlertStore = {
     for (const proj of projects) {
       if (proj.status !== 'active') continue;
       for (const stage of (proj.stages || [])) {
-        if (stage.status === 'completed' || stage.status === 'skipped' || !stage.deadline) continue;
-        const deadline = new Date(stage.deadline + 'T00:00:00');
-        const daysUntil = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
         const stageDef = STAGE_DEFINITIONS.find(s => s.key === stage.stage_key);
         const stageName = stageDef ? stageDef.name : stage.stage_key;
 
-        if (daysUntil < 0) {
-          newAlerts.push({
-            project_id: proj.id,
-            stage_key: stage.stage_key,
-            type: 'overdue',
-            message: `${proj.name}: etapa "${stageName}" está ${Math.abs(daysUntil)} dia(s) atrasada!`,
-            alert_date: today.toISOString().split('T')[0]
-          });
-        } else if (daysUntil <= 3) {
-          newAlerts.push({
-            project_id: proj.id,
-            stage_key: stage.stage_key,
-            type: 'deadline_warning',
-            message: `${proj.name}: etapa "${stageName}" vence em ${daysUntil} dia(s).`,
-            alert_date: today.toISOString().split('T')[0]
-          });
-        }
-      });
-    }
+        // 1. Check Deadline (pending/in_progress)
+        if ((stage.status === 'pending' || stage.status === 'in_progress') && stage.deadline) {
+          const deadline = new Date(stage.deadline + 'T00:00:00');
+          const daysUntil = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
 
-    // Check for client delay
-    if (stage.client_review_start && !stage.client_review_end) {
-      const start = new Date(stage.client_review_start + 'T00:00:00');
-      const daysInReview = Math.floor((today - start) / (1000 * 60 * 60 * 24));
-      if (daysInReview > 2) {
-        newAlerts.push({
-          project_id: proj.id,
-          stage_key: stage.stage_key,
-          type: 'client_delay',
-          message: `${proj.name}: etapa "${stageName}" aguarda cliente há ${daysInReview} dias.`,
-          alert_date: today.toISOString().split('T')[0]
-        });
+          if (daysUntil < 0) {
+            newAlerts.push({
+              project_id: proj.id,
+              stage_key: stage.stage_key,
+              type: 'overdue',
+              message: `${proj.name}: etapa "${stageName}" está ${Math.abs(daysUntil)} dia(s) atrasada!`,
+              alert_date: today.toISOString().split('T')[0]
+            });
+          } else if (daysUntil <= 3) {
+            newAlerts.push({
+              project_id: proj.id,
+              stage_key: stage.stage_key,
+              type: 'deadline_warning',
+              message: `${proj.name}: etapa "${stageName}" vence em ${daysUntil} dia(s).`,
+              alert_date: today.toISOString().split('T')[0]
+            });
+          }
+        }
+
+        // 2. Check Client Delay
+        if (stage.client_review_start && !stage.client_review_end) {
+          const start = new Date(stage.client_review_start + 'T00:00:00');
+          const daysInReview = Math.floor((today - start) / (1000 * 60 * 60 * 24));
+          if (daysInReview > 2) {
+            newAlerts.push({
+              project_id: proj.id,
+              stage_key: stage.stage_key,
+              type: 'client_delay',
+              message: `${proj.name}: etapa "${stageName}" aguarda cliente há ${daysInReview} dias.`,
+              alert_date: today.toISOString().split('T')[0]
+            });
+          }
+        }
       }
     }
-  }
-}
 
-// Clear old auto-generated alerts for today and re-create
-const todayStr = today.toISOString().split('T')[0];
-await sb().from('alerts').delete().eq('alert_date', todayStr).in('type', ['overdue', 'deadline_warning']);
-if (newAlerts.length > 0) {
-  await sb().from('alerts').insert(newAlerts);
-}
-return newAlerts;
+    // Clear old auto-generated alerts for today and re-create
+    const todayStr = today.toISOString().split('T')[0];
+    await sb().from('alerts').delete().eq('alert_date', todayStr).in('type', ['overdue', 'deadline_warning', 'client_delay']);
+    if (newAlerts.length > 0) {
+      await sb().from('alerts').insert(newAlerts);
+    }
+    return newAlerts;
   }
 };
 

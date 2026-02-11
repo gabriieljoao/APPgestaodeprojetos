@@ -76,6 +76,10 @@ const UI = {
           <button class="nav-item ${currentRoute === '/' ? 'active' : ''}" onclick="App.navigate('/')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             Dashboard
+          </button>
+          <button class="nav-item" onclick="App.showAlerts()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+            Alertas
             ${alertCount > 0 ? `<span class="nav-badge">${alertCount}</span>` : ''}
           </button>
           <button class="nav-item ${currentRoute.startsWith('/projects') ? 'active' : ''}" onclick="App.navigate('/projects')">
@@ -272,12 +276,29 @@ const UI = {
 
   // Alert item
   renderAlertItem(alert) {
+    const icons = { overdue: '⚠️', deadline_warning: '⏰', client_delay: '⏳', default: 'ℹ️' };
+    const icon = icons[alert.type] || icons.default;
     return `
-    <div class="alert-item animate-slide-up">
-      <div class="alert-dot ${alert.type}"></div>
-      <div class="alert-text">${alert.message}</div>
-      <div class="alert-date">${formatDate(alert.alert_date)}</div>
-      <button class="alert-dismiss btn btn-icon btn-ghost btn-sm" onclick="App.dismissAlert('${alert.id}')">✕</button>
+      <div class="alert-item ${alert.type} animate-slide-up">
+        <div class="alert-icon">${icon}</div>
+        <div class="alert-content">
+          <div class="alert-message">${alert.message}</div>
+          <div class="alert-date">${formatDate(alert.alert_date)}</div>
+        </div>
+        <button class="btn btn-icon btn-ghost btn-sm" onclick="App.dismissAlert('${alert.id}')">✕</button>
+      </div>
+    `;
+  },
+
+  renderAlertsList(alerts) {
+    if (!alerts || alerts.length === 0) {
+      return this.emptyState('🎉', 'Tudo certo!', 'Você não tem novos alertas.', `<button class="btn btn-secondary" onclick="UI.closeModal()">Fechar</button>`);
+    }
+    return `<div class="alert-list">
+      ${alerts.map(a => this.renderAlertItem(a)).join('')}
+    </div>
+    <div style="margin-top:20px;text-align:center">
+      <button class="btn btn-ghost btn-sm" onclick="App.dismissAllAlerts()">Limpar tudo</button>
     </div>`;
   },
 

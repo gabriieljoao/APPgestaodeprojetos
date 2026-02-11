@@ -1920,3 +1920,75 @@ tbody tr:last-child td {
   white-space: nowrap;
   letter-spacing: 0.2px;
 }
+
+/* Alerts List */
+.alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.alert-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--bg-card);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+  position: relative;
+}
+
+.alert-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+
+.alert-item.overdue {
+  border-left: 3px solid var(--error);
+}
+
+.alert-item.deadline_warning {
+  border-left: 3px solid var(--warning);
+}
+
+.alert-item.client_delay {
+  border-left: 3px solid var(--accent-cyan);
+}
+
+.alert-icon {
+  font-size: 18px;
+  margin-top: 2px;
+}
+
+.alert-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.alert-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.alert-item .btn-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.alert-item .btn-icon:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+}

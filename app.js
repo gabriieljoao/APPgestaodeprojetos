@@ -676,13 +676,50 @@ const App = {
   },
 
   // ========== ALERT ACTIONS ==========
+  async showAlerts() {
+    this.cache.alerts = await AlertStore.getActive();
+    UI.openModal('🔔 Alertas', UI.renderAlertsList(this.cache.alerts), '', { maxWidth: '480px' });
+  },
+
   async dismissAlert(id) {
-    try { await AlertStore.dismiss(id); this.invalidateCache(); await this.route(); } catch (e) { UI.toast('Erro: ' + e.message, 'error'); }
+    try {
+      await AlertStore.dismiss(id);
+      this.cache.alerts = await AlertStore.getActive();
+      // If modal is open, refresh it
+      if (document.querySelector('.modal-body .alert-list') || document.querySelector('.modal-body .empty-state')) {
+        document.querySelector('.modal-body').innerHTML = UI.renderAlertsList(this.cache.alerts);
+      }
+      this.updateAlertBadge();
+    } catch (e) { UI.toast('Erro: ' + e.message, 'error'); }
   },
 
   async dismissAllAlerts() {
-    try { await AlertStore.dismissAll(); UI.toast('Alertas limpos!', 'success'); this.invalidateCache(); await this.route(); }
-    catch (e) { UI.toast('Erro: ' + e.message, 'error'); }
+    try {
+      await AlertStore.dismissAll();
+      this.cache.alerts = [];
+      if (document.querySelector('.modal-body .alert-list')) {
+        document.querySelector('.modal-body').innerHTML = UI.renderAlertsList([]);
+      }
+      this.updateAlertBadge();
+      UI.toast('Alertas limpos!', 'success');
+    } catch (e) { UI.toast('Erro: ' + e.message, 'error'); }
+  },
+
+  updateAlertBadge() {
+    const list = document.querySelectorAll('.nav-item');
+    let alertsBtn = null;
+    list.forEach(el => { if (el.innerText.includes('Alertas')) alertsBtn = el; });
+
+    if (alertsBtn) {
+      const existing = alertsBtn.querySelector('.nav-badge');
+      if (existing) existing.remove();
+      if (this.cache.alerts && this.cache.alerts.length > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'nav-badge';
+        badge.innerText = this.cache.alerts.length;
+        alertsBtn.appendChild(badge);
+      }
+    }
   }
 };
 
