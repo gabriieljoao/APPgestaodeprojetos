@@ -19,13 +19,27 @@ const STATUS_LABELS = {
 const PRIORITY_LABELS = { low: 'Baixa', medium: 'Média', high: 'Alta', urgent: 'Urgente' };
 
 // Supabase config stored in localStorage
+// Supabase config stored in localStorage (Encrypted)
 function getSupabaseConfig() {
-  const cfg = localStorage.getItem('supabase_config');
-  return cfg ? JSON.parse(cfg) : null;
+  const enc = localStorage.getItem('supabase_vault');
+  if (enc) return SecurityStore.decrypt(enc);
+
+  // Migration from plaintext
+  const legacy = localStorage.getItem('supabase_config');
+  if (legacy) {
+    try {
+      const data = JSON.parse(legacy);
+      saveSupabaseConfig(data.url, data.key);
+      localStorage.removeItem('supabase_config');
+      return data;
+    } catch (e) { return null; }
+  }
+  return null;
 }
 
 function saveSupabaseConfig(url, key) {
-  localStorage.setItem('supabase_config', JSON.stringify({ url, key }));
+  const encrypted = SecurityStore.encrypt({ url, key });
+  localStorage.setItem('supabase_vault', encrypted);
 }
 
 let supabaseClient = null;
@@ -188,53 +202,35 @@ const AlertStore = {
     for (const proj of projects) {
       if (proj.status !== 'active') continue;
       for (const stage of (proj.stages || [])) {
+        if (stage.status === 'completed' || stage.status === 'skipped' || !stage.deadline) continue;
+        const deadline = new Date(stage.deadline + 'T00:00:00');
+        const daysUntil = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
         const stageDef = STAGE_DEFINITIONS.find(s => s.key === stage.stage_key);
         const stageName = stageDef ? stageDef.name : stage.stage_key;
 
-        // 1. Check Deadline (pending/in_progress)
-        if ((stage.status === 'pending' || stage.status === 'in_progress') && stage.deadline) {
-          const deadline = new Date(stage.deadline + 'T00:00:00');
-          const daysUntil = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
-
-          if (daysUntil < 0) {
-            newAlerts.push({
-              project_id: proj.id,
-              stage_key: stage.stage_key,
-              type: 'overdue',
-              message: `${proj.name}: etapa "${stageName}" está ${Math.abs(daysUntil)} dia(s) atrasada!`,
-              alert_date: today.toISOString().split('T')[0]
-            });
-          } else if (daysUntil <= 3) {
-            newAlerts.push({
-              project_id: proj.id,
-              stage_key: stage.stage_key,
-              type: 'deadline_warning',
-              message: `${proj.name}: etapa "${stageName}" vence em ${daysUntil} dia(s).`,
-              alert_date: today.toISOString().split('T')[0]
-            });
-          }
-        }
-
-        // 2. Check Client Delay
-        if (stage.client_review_start && !stage.client_review_end) {
-          const start = new Date(stage.client_review_start + 'T00:00:00');
-          const daysInReview = Math.floor((today - start) / (1000 * 60 * 60 * 24));
-          if (daysInReview > 2) {
-            newAlerts.push({
-              project_id: proj.id,
-              stage_key: stage.stage_key,
-              type: 'client_delay',
-              message: `${proj.name}: etapa "${stageName}" aguarda cliente há ${daysInReview} dias.`,
-              alert_date: today.toISOString().split('T')[0]
-            });
-          }
+        if (daysUntil < 0) {
+          newAlerts.push({
+            project_id: proj.id,
+            stage_key: stage.stage_key,
+            type: 'overdue',
+            message: `${proj.name}: etapa "${stageName}" está ${Math.abs(daysUntil)} dia(s) atrasada!`,
+            alert_date: today.toISOString().split('T')[0]
+          });
+        } else if (daysUntil <= 3) {
+          newAlerts.push({
+            project_id: proj.id,
+            stage_key: stage.stage_key,
+            type: 'deadline_warning',
+            message: `${proj.name}: etapa "${stageName}" vence em ${daysUntil} dia(s).`,
+            alert_date: today.toISOString().split('T')[0]
+          });
         }
       }
     }
 
-    // Clear old auto-generated alerts for today and re-create
-    const todayStr = today.toISOString().split('T')[0];
-    await sb().from('alerts').delete().eq('alert_date', todayStr).in('type', ['overdue', 'deadline_warning', 'client_delay']);
+    // Dismiss previous active alerts of these types to ensure we only show the latest status
+    await sb().from('alerts').update({ dismissed: true }).eq('dismissed', false).in('type', ['overdue', 'deadline_warning']);
+
     if (newAlerts.length > 0) {
       await sb().from('alerts').insert(newAlerts);
     }
@@ -290,3 +286,103 @@ function generateId() {
 function getInitials(name) {
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
+
+/* --- SYSTEM SETTINGS --- */
+const SystemStore = {
+  defaults: {
+    name: 'Gestão de Projetos',
+    subtitle: 'Gerenciador de Sites',
+    logoType: 'icon', // 'icon' or 'url'
+    logoUrl: '',
+    logoIcon: 'G',
+    primaryColor: '#8b5cf6',
+    secondaryColor: '#06b6d4',
+    theme: 'dark'
+  },
+
+  get() {
+    const s = localStorage.getItem('system_settings');
+    return s ? { ...this.defaults, ...JSON.parse(s) } : this.defaults;
+  },
+
+  save(settings) {
+    localStorage.setItem('system_settings', JSON.stringify(settings));
+    return settings;
+  }
+};
+
+/* --- SECURITY --- */
+const SecurityStore = {
+  SALT: 'pjt-mgr-s3cur1ty-',
+
+  // PIN
+  async setPin(pin) {
+    if (!pin) { localStorage.removeItem('app_pin'); return; }
+    const hash = await this._hash(pin);
+    localStorage.setItem('app_pin', hash);
+  },
+
+  async checkPin(pin) {
+    const stored = localStorage.getItem('app_pin');
+    if (!stored) return true;
+    const hash = await this._hash(pin);
+    return hash === stored;
+  },
+
+  hasPin() {
+    return !!localStorage.getItem('app_pin');
+  },
+
+  // Encryption (Obfuscation)
+  encrypt(data) {
+    try {
+      const str = JSON.stringify(data);
+      return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
+        function toSolidBytes(match, p1) {
+          return String.fromCharCode('0x' + p1);
+        }));
+    } catch (e) { console.error('Encrypt error', e); return null; }
+  },
+
+  decrypt(ciphertext) {
+    try {
+      const str = decodeURIComponent(atob(ciphertext).split('').map(function (c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(str);
+    } catch (e) { return null; }
+  },
+
+  async _hash(str) {
+    const msgBuffer = new TextEncoder().encode(str + this.SALT);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+};
+
+/* --- ACTIVITY LOG --- */
+const LogStore = {
+  add(action, details, projectId = null) {
+    const log = {
+      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+      date: new Date().toISOString(),
+      action,
+      details,
+      projectId
+    };
+    const logs = this.getAll();
+    logs.unshift(log);
+    if (logs.length > 100) logs.pop(); // Keep last 100
+    localStorage.setItem('activity_log', JSON.stringify(logs));
+    return log;
+  },
+
+  getAll() {
+    return JSON.parse(localStorage.getItem('activity_log') || '[]');
+  },
+
+  clear() {
+    localStorage.removeItem('activity_log');
+  }
+};
