@@ -81,33 +81,10 @@ const UI = {
     const collapsed = localStorage.getItem('sidebar-collapsed') === 'true';
     const logoHtml = s.logoType === 'url' && s.logoUrl
       ? `<img src="${s.logoUrl}" style="width:32px;height:32px;border-radius:8px;object-fit:cover">`
-      : `<div class="logo-icon">${s.logoIcon || 'G'}</div>`;
+      : s.logoType === 'upload' && s.logoUploadData
+        ? `<img src="${s.logoUploadData}" style="width:32px;height:32px;border-radius:8px;object-fit:cover">`
+        : `<div class="logo-icon">${s.logoIcon || 'G'}</div>`;
 
-    let activityHtml = `
-      <div class="nav-section" style="margin-top:auto;padding-top:12px;border-top:1px solid var(--sidebar-border)">
-        <div class="nav-section-title">ATIVIDADES RECENTES</div>
-        <div class="sidebar-activity-list">`;
-
-    if (logs && logs.length > 0) {
-      activityHtml += logs.slice(0, 8).map(l => {
-        const proj = projects.find(p => p.id === l.projectId);
-        const projName = proj ? proj.name : (l.projectId ? 'Desconhecido' : 'Sistema');
-        // Prevent clicking 'System' logs if no project ID
-        const onClickAttr = l.projectId ? `onclick="App.openProjectActivity('${l.projectId}')"` : '';
-        const styleAttr = l.projectId ? '' : 'style="cursor:default"';
-
-        return `
-          <div class="act-item-side" ${onClickAttr} ${styleAttr} title="Ver histórico do projeto">
-            <div class="act-proj-side">${projName}</div>
-            <div class="act-desc-side">${l.details}</div>
-            <div class="act-time-side">${new Date(l.date).toLocaleString()}</div>
-          </div>`;
-      }).join('');
-    } else {
-      activityHtml += `<div class="act-time-side" style="text-align:center;padding:8px">Nenhuma atividade registrada</div>`;
-    }
-
-    activityHtml += `</div></div>`;
 
     return `
     <div class="sidebar ${collapsed ? 'collapsed' : ''}" id="sidebar">
@@ -147,12 +124,15 @@ const UI = {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             <span class="nav-label">Templates PDF</span>
           </button>
+          <button class="nav-item ${currentRoute === '/activity-log' ? 'active' : ''}" onclick="App.navigate('/activity-log')" data-tooltip="Log de Atividades">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span class="nav-label">Log de Atividades</span>
+          </button>
           <button class="nav-item ${currentRoute === '/settings' ? 'active' : ''}" onclick="App.navigate('/settings')" data-tooltip="Configurações">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             <span class="nav-label">Configurações</span>
           </button>
         </div>
-        ${activityHtml}
       </nav>
       <div class="sidebar-footer">
         <div style="font-size:11px;color:var(--text-muted)">📅 ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
@@ -218,7 +198,6 @@ const UI = {
           <div style="font-size:12px;color:var(--text-muted)">${project.client}</div>
         </div>
         <div class="flex gap-8">
-          <span class="badge badge-${project.priority}">${PRIORITY_LABELS[project.priority] || project.priority}</span>
           <span class="badge badge-${project.status}">${STATUS_LABELS[project.status] || project.status}</span>
         </div>
       </div>
@@ -330,6 +309,21 @@ const UI = {
           <div style="font-size:12px;font-weight:600;color:${stage.completed_date ? 'var(--success)' : 'var(--text-muted)'}">${formatDate(stage.completed_date)}</div>
         </div>
       </div>
+      <!-- Business days row -->
+      ${def.business_days !== null ? (() => {
+        const actualDays = (stage.start_date && stage.deadline)
+          ? countBusinessDays(stage.start_date, stage.deadline)
+          : null;
+        return `
+          <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:7px 12px;background:rgba(99,102,241,0.08);border-radius:var(--radius-sm);border:1px solid rgba(99,102,241,0.15)">
+            <span style="font-size:11px;color:var(--text-muted);font-weight:500">📆 Dias úteis:</span>
+            ${actualDays !== null
+            ? `<span style="font-size:12px;font-weight:700;color:var(--accent-violet)">${actualDays} dias úteis</span>
+                 <span style="font-size:11px;color:var(--text-muted)">(padrão: ${def.business_days}du)</span>`
+            : `<span style="font-size:12px;color:var(--text-muted);font-style:italic">Padrão: ${def.business_days} dias úteis</span>`
+          }
+          </div>`;
+      })() : ''}
 
       <!-- Responsável -->
       <div style="display:flex;align-items:center;gap:10px;margin-top:14px">

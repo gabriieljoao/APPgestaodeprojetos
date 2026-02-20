@@ -50,6 +50,7 @@ const App = {
       else if (hash === '/personas') await this.pagePersonas();
       else if (hash === '/analytics') await this.pageAnalytics();
       else if (hash === '/templates') this.pageTemplates();
+      else if (hash === '/activity-log') await this.pageActivityLog();
       else if (hash === '/settings') this.pageSettings();
       else await this.pageDashboard();
     } catch (err) {
@@ -223,8 +224,8 @@ const App = {
 
   async openProjectActivity(projectId) {
     if (!projectId) return;
-    const projects = await this.loadData('projects');
-    const project = (projects.projects || projects).find(p => p.id === projectId);
+    const { projects } = await this.loadData();
+    const project = projects.find(p => p.id === projectId);
 
     if (!project) return UI.toast('Projeto não encontrado', 'error');
 
@@ -251,6 +252,59 @@ const App = {
     `;
 
     UI.openModal(`Histórico: ${project.name}`, content);
+  },
+
+  async pageActivityLog() {
+    this.renderLayoutFast('Log de Atividades');
+    const { projects } = await this.loadData();
+    const projectMap = {};
+    projects.forEach(p => projectMap[p.id] = p);
+
+    const logs = LogStore.getAll().slice().reverse(); // newest first
+
+    const rows = logs.length > 0
+      ? logs.map(l => {
+        const proj = l.projectId ? projectMap[l.projectId] : null;
+        const projName = proj ? proj.name : (l.projectId ? 'Desconhecido' : 'Sistema');
+        const projLink = proj
+          ? `<a href="#" onclick="App.navigate('/projects/${proj.id}');return false;" style="color:var(--accent-cyan);font-weight:600;font-size:11px;text-decoration:none">${projName}</a>`
+          : `<span style="font-size:11px;color:var(--text-muted)">${projName}</span>`;
+        const action = l.action ? l.action.replace(/_/g, ' ') : '';
+        return `
+            <tr>
+              <td style="white-space:nowrap;color:var(--text-muted);font-size:12px">${new Date(l.date).toLocaleString('pt-BR')}</td>
+              <td>${projLink}</td>
+              <td style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:capitalize">${action}</td>
+              <td style="font-size:12px;color:var(--text-primary)">${l.details}</td>
+            </tr>`;
+      }).join('')
+      : `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text-muted)">Nenhuma atividade registrada.</td></tr>`;
+
+    this.setContent(`
+      <div class="animate-fade">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <p class="page-subtitle" style="margin:0">${logs.length} registro(s) no log.</p>
+          <button class="btn btn-secondary" onclick="App.clearLog()" style="font-size:12px">🗑️ Limpar Log</button>
+        </div>
+        <div class="card" style="overflow:hidden;padding:0">
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead>
+                <tr style="background:var(--bg-elevated);border-bottom:1px solid var(--border)">
+                  <th style="padding:12px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);white-space:nowrap">Data / Hora</th>
+                  <th style="padding:12px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted)">Projeto</th>
+                  <th style="padding:12px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted)">Ação</th>
+                  <th style="padding:12px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted)">Detalhe</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `);
   },
 
   async clearLog() {
@@ -468,6 +522,7 @@ const App = {
             <p class="page-subtitle" style="margin-bottom:0">Cliente: ${project.client} · Contrato: ${formatDate(project.contract_date)}</p>
           </div>
           <div class="flex gap-8">
+            <button class="btn btn-secondary" onclick="App.autoScheduleProject('${id}')" title="Preencher datas automaticamente por dias úteis">📅 Auto-Cronograma</button>
             <select class="form-select" style="width:auto;padding:6px 12px;font-size:12px" onchange="App.updateProjectStatus('${id}', this.value)">
               <option value="active" ${project.status === 'active' ? 'selected' : ''}>Ativo</option>
               <option value="paused" ${project.status === 'paused' ? 'selected' : ''}>Pausado</option>
@@ -496,7 +551,7 @@ const App = {
         <div class="flex gap-8 mt-24 justify-between">
           <button class="btn btn-secondary" onclick="App.navigate('/projects')">← Voltar</button>
           <div class="flex gap-8">
-            ${project.status === 'completed' ? `<button class="btn btn-primary" onclick="App.generateProjectReport('${id}')">📄 Extrato PDF</button>` : ''}
+            <button class="btn btn-primary" onclick="App.generateProjectReport('${id}')">📄 Extrato PDF</button>
             <button class="btn btn-secondary" onclick="App.editProject('${id}')">✏️ Editar Projeto</button>
             <button class="btn btn-danger" onclick="App.deleteProject('${id}')">🗑️ Excluir</button>
           </div>
@@ -565,6 +620,7 @@ const App = {
     if (!tpl) return UI.toast('Template não encontrado', 'error');
     const cols = tpl.columns;
     const hdr = tpl.header;
+    const sysName = SystemStore.get().name || 'Gestão de Projetos';
 
     const project = await ProjectStore.getById(projectId);
     const stages = await StageStore.getByProject(projectId);
@@ -599,6 +655,10 @@ const App = {
     if (hdr.showProgress) infoCards.push('<div class="info-box"><div class="label">Progresso</div><div class="value blue">' + getProjectProgress(stages) + '%</div></div>');
     const gridCols = infoCards.length || 1;
 
+    // Filter stages by excluded stage keys from template
+    const excludedStages = tpl.excludedStages || [];
+    const visibleStages = stages.filter(s => !excludedStages.includes(s.stage_key));
+
     // Dynamic table columns
     const colDefs = [
       { key: 'etapa', label: 'Etapa', fn: (s, def) => '<div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:50%;background:' + def.color + ';display:inline-block"></span><strong>' + def.icon + ' ' + def.name + '</strong></div>' },
@@ -606,6 +666,15 @@ const App = {
       { key: 'inicio', label: 'Início', fn: (s) => formatDate(s.start_date) },
       { key: 'prazo', label: 'Prazo', fn: (s) => formatDate(s.deadline) },
       { key: 'conclusao', label: 'Conclusão', fn: (s) => formatDate(s.completed_date) },
+      {
+        key: 'diasUteis', label: 'Dias Úteis', fn: (s, def) => {
+          if (s.start_date && s.deadline) {
+            const actual = countBusinessDays(s.start_date, s.deadline);
+            return `<span style="font-weight:600">${actual} dias</span>`;
+          }
+          return def.business_days != null ? def.business_days + ' dias' : '\u2014';
+        }
+      },
       { key: 'responsavel', label: 'Responsável', fn: (s) => { const p = s.assigned_persona_id ? personaMap[s.assigned_persona_id] : null; return p ? p.name : '—'; } },
       {
         key: 'aprovacaoCliente', label: 'Aprovação Cliente', fn: (s) => {
@@ -619,7 +688,7 @@ const App = {
     const activeCols = colDefs.filter(c => cols[c.key]);
 
     const theadHtml = activeCols.map(c => '<th>' + c.label + '</th>').join('');
-    const tbodyHtml = stages.map(s => {
+    const tbodyHtml = visibleStages.map(s => {
       const def = STAGE_DEFINITIONS.find(d => d.key === s.stage_key);
       if (!def) return '';
       return '<tr>' + activeCols.map(c => '<td>' + c.fn(s, def) + '</td>').join('') + '</tr>';
@@ -658,7 +727,7 @@ const App = {
       (infoCards.length > 0 ? '<div class="info-grid">' + infoCards.join('') + '</div>' : '') +
       (activeCols.length > 0 ? '<div class="section-title">📋 Detalhamento por Etapa</div><table><thead><tr>' + theadHtml + '</tr></thead><tbody>' + tbodyHtml + '</tbody></table>' : '') +
       (hdr.showProjectNotes !== false && project.notes ? '<div class="section-title">📝 Observações do Projeto</div><p style="font-size:12px;color:#4b5563;line-height:1.6;margin-bottom:20px">' + project.notes + '</p>' : '') +
-      (hdr.showFooter !== false ? '<div class="footer">Relatório gerado em ' + now + ' · Template: ' + tpl.name + ' · Gestão de Projetos</div>' : '') +
+      (hdr.showFooter !== false ? '<div class="footer"><p style="font-size:11px;color:#6b7280;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px 16px;margin-bottom:12px;line-height:1.6;text-align:left"><strong>⚠️ Aviso:</strong> Os prazos apresentados neste documento são <strong>estimativas</strong> baseadas no planejamento atual do projeto e podem sofrer alterações ao longo do desenvolvimento. Fatores como mudanças de escopo, aprovações pendentes ou imprevistos operacionais podem impactar as datas previstas. Este extrato não constitui garantia contratual de entrega nas datas indicadas.</p>Relatório gerado em ' + now + ' · Template: ' + tpl.name + ' · ' + sysName + '</div>' : '') +
       '</div></body></html>';
 
     const reportWindow = window.open('', '_blank');
@@ -773,6 +842,113 @@ const App = {
       this.invalidateCache();
       await this.route();
     } catch (e) { UI.toast('Erro: ' + e.message, 'error'); }
+  },
+
+  // ========== AUTO SCHEDULE ==========
+  autoScheduleProject(projectId) {
+    const project = this.cache._currentProject;
+    if (!project) return UI.toast('Projeto não encontrado no cache', 'error');
+
+    const contractDate = project.contract_date;
+    const stages = this.cache._currentStages || [];
+
+    // Build rows only for stages that exist in DB (not skipped)
+    const rows = STAGE_DEFINITIONS
+      .filter(sd => stages.find(s => s.stage_key === sd.key && s.status !== 'skipped'))
+      .map(sd => {
+        const stage = stages.find(s => s.stage_key === sd.key);
+        const defaultDays = sd.business_days || 0;
+        const hasDays = sd.business_days !== null;
+        return `
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="width:10px;height:10px;border-radius:50%;background:${sd.color};display:inline-block"></span>
+              <span style="font-size:13px;font-weight:600">${sd.icon} ${sd.name}${sd.optional ? ' <span style="font-size:10px;color:var(--text-muted)">(opcional)</span>' : ''}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              ${hasDays
+            ? `<input type="number" class="form-input" id="as-days-${sd.key}" value="${defaultDays}" min="1" max="365" style="width:70px;text-align:center">
+                   <span style="font-size:12px;color:var(--text-muted)">dias úteis</span>`
+            : `<span style="font-size:12px;color:var(--text-muted);font-style:italic">Sem prazo automático</span>`
+          }
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);text-align:right">
+              ${stage?.start_date ? `Início atual: ${formatDate(stage.start_date)}` : ''}
+            </div>
+          </div>`;
+      }).join('');
+
+    UI.openModal('📅 Auto-Cronograma por Dias Úteis',
+      `<div style="margin-bottom:16px">
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">
+          As datas de início e prazo de cada etapa serão calculadas automaticamente a partir da <strong>Data do Contrato</strong>.
+          Ajuste os dias úteis de cada etapa antes de aplicar.
+        </p>
+        <div style="padding:10px 14px;background:var(--sidebar-bg);border-radius:8px;margin-bottom:16px;font-size:13px">
+          📋 Data do Contrato: <strong>${contractDate ? formatDate(contractDate) : '<span style="color:var(--error)">Não definida — edite o projeto primeiro</span>'}</strong>
+        </div>
+        <div style="max-height:50vh;overflow-y:auto">
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;padding:6px 0;margin-bottom:4px">
+            <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Etapa</span>
+            <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Duração</span>
+            <span></span>
+          </div>
+          ${rows}
+        </div>
+      </div>`,
+      `<button class="btn btn-secondary" onclick="UI.closeModal()">Cancelar</button>
+       <button class="btn btn-primary" onclick="App.applyAutoSchedule('${projectId}')" ${!contractDate ? 'disabled title="Data do contrato não definida"' : ''}>Aplicar Cronograma</button>`,
+      { maxWidth: '600px' }
+    );
+  },
+
+  async applyAutoSchedule(projectId) {
+    const project = this.cache._currentProject;
+    if (!project?.contract_date) return UI.toast('Data do contrato não definida!', 'error');
+
+    const stages = this.cache._currentStages || [];
+    let cursor = new Date(project.contract_date);
+    // Make sure cursor is Mon-Fri — if it's a weekend, advance to Monday
+    while (cursor.getDay() === 0 || cursor.getDay() === 6) cursor.setDate(cursor.getDate() + 1);
+
+    const updates = [];
+
+    for (const sd of STAGE_DEFINITIONS) {
+      const stage = stages.find(s => s.stage_key === sd.key);
+      if (!stage || stage.status === 'skipped') continue;
+      if (sd.business_days === null) {
+        // Negotiation: start = contract_date, no deadline override
+        updates.push(StageStore.update(stage.id, {
+          start_date: toISODate(cursor)
+        }));
+        continue;
+      }
+
+      const inputEl = document.getElementById(`as-days-${sd.key}`);
+      const days = inputEl ? parseInt(inputEl.value) || sd.business_days : sd.business_days;
+
+      const startDate = new Date(cursor);
+      const endDate = addBusinessDays(startDate, days);
+
+      updates.push(StageStore.update(stage.id, {
+        start_date: toISODate(startDate),
+        deadline: toISODate(endDate)
+      }));
+
+      // Next stage starts the business day after this one ends
+      cursor = addBusinessDays(endDate, 1);
+    }
+
+    try {
+      await Promise.all(updates);
+      UI.closeModal();
+      UI.toast('Cronograma preenchido automaticamente!', 'success');
+      LogStore.add('auto_schedule', 'Cronograma auto-preenchido por dias úteis', projectId);
+      this.invalidateCache();
+      await this.route();
+    } catch (e) {
+      UI.toast('Erro ao aplicar cronograma: ' + e.message, 'error');
+    }
   },
 
   async deleteProject(id) {
@@ -895,7 +1071,8 @@ const App = {
       id: Date.now().toString(),
       name: 'Template Padrão',
       header: { showClient: true, showContractDate: true, showStatus: true, showProgress: true, showClientDays: true, showSkipped: true, showProjectNotes: true, showFooter: true },
-      columns: { etapa: true, status: true, inicio: true, prazo: true, conclusao: true, responsavel: true, aprovacaoCliente: true, anotacoes: true }
+      columns: { etapa: true, status: true, inicio: true, prazo: true, conclusao: true, diasUteis: true, responsavel: true, aprovacaoCliente: true, anotacoes: true },
+      excludedStages: []
     };
   },
 
@@ -906,12 +1083,13 @@ const App = {
       this._saveTemplates(templates);
     }
 
-    const columnsLabels = { etapa: 'Etapa', status: 'Status', inicio: 'Início', prazo: 'Prazo', conclusao: 'Conclusão', responsavel: 'Responsável', aprovacaoCliente: 'Aprovação Cliente', anotacoes: 'Anotações' };
+    const columnsLabels = { etapa: 'Etapa', status: 'Status', inicio: 'Início', prazo: 'Prazo', conclusao: 'Conclusão', diasUteis: 'Dias Úteis', responsavel: 'Responsável', aprovacaoCliente: 'Aprovação Cliente', anotacoes: 'Anotações' };
     const headerLabels = { showClient: 'Cliente', showContractDate: 'Data de Contrato', showStatus: 'Status do Projeto', showProgress: 'Progresso', showClientDays: 'Dias com Cliente', showSkipped: 'Etapas Puladas', showProjectNotes: 'Observações do Projeto', showFooter: 'Rodapé' };
 
     const cardsHtml = templates.map(t => {
-      const enabledCols = Object.entries(t.columns).filter(([, v]) => v).map(([k]) => columnsLabels[k] || k);
-      const enabledHeaders = Object.entries(t.header).filter(([, v]) => v).map(([k]) => headerLabels[k] || k);
+      const enabledCols = Object.entries(t.columns || {}).filter(([, v]) => v).map(([k]) => columnsLabels[k] || k);
+      const enabledHeaders = Object.entries(t.header || {}).filter(([, v]) => v).map(([k]) => headerLabels[k] || k);
+      const excluded = (t.excludedStages || []).map(k => { const d = STAGE_DEFINITIONS.find(s => s.key === k); return d ? d.name : k; });
       return `
         <div class="card template-card">
           <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
@@ -929,12 +1107,19 @@ const App = {
                 ${enabledHeaders.map(h => `<span class="tag tag-blue">${h}</span>`).join('')}
               </div>
             </div>
-            <div>
+            <div style="margin-bottom:8px">
               <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted)">Colunas da Tabela</span>
               <div class="flex gap-4" style="flex-wrap:wrap;margin-top:4px">
                 ${enabledCols.map(c => `<span class="tag tag-violet">${c}</span>`).join('')}
               </div>
             </div>
+            ${excluded.length > 0 ? `
+            <div>
+              <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted)">Etapas excluídas do PDF</span>
+              <div class="flex gap-4" style="flex-wrap:wrap;margin-top:4px">
+                ${excluded.map(n => `<span class="tag" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2)">${n}</span>`).join('')}
+              </div>
+            </div>` : ''}
           </div>
         </div>`;
     }).join('');
@@ -962,15 +1147,28 @@ const App = {
   },
 
   _openTemplateEditor(t, isNew) {
-    const columnsLabels = { etapa: 'Etapa', status: 'Status', inicio: 'Data de Início', prazo: 'Prazo / Deadline', conclusao: 'Data de Conclusão', responsavel: 'Responsável', aprovacaoCliente: 'Aprovação do Cliente', anotacoes: 'Anotações' };
+    const columnsLabels = { etapa: 'Etapa', status: 'Status', inicio: 'Data de Início', prazo: 'Prazo / Deadline', conclusao: 'Data de Conclusão', diasUteis: 'Dias Úteis', responsavel: 'Responsável', aprovacaoCliente: 'Aprovação do Cliente', anotacoes: 'Anotações' };
     const headerLabels = { showClient: 'Nome do Cliente', showContractDate: 'Data de Contrato', showStatus: 'Status do Projeto', showProgress: 'Card de Progresso', showClientDays: 'Card Dias com Cliente', showSkipped: 'Card Etapas Puladas', showProjectNotes: 'Observações do Projeto', showFooter: 'Rodapé do Relatório' };
 
+    const excluded = t.excludedStages || [];
+
     const columnsHtml = Object.entries(columnsLabels).map(([key, label]) =>
-      `<label class="toggle-row"><input type="checkbox" id="tc-${key}" ${t.columns[key] ? 'checked' : ''}> <span>${label}</span></label>`
+      `<label class="toggle-row"><input type="checkbox" id="tc-${key}" ${(t.columns || {})[key] ? 'checked' : ''}> <span>${label}</span></label>`
     ).join('');
 
     const headerHtml = Object.entries(headerLabels).map(([key, label]) =>
-      `<label class="toggle-row"><input type="checkbox" id="th-${key}" ${t.header[key] ? 'checked' : ''}> <span>${label}</span></label>`
+      `<label class="toggle-row"><input type="checkbox" id="th-${key}" ${(t.header || {})[key] ? 'checked' : ''}> <span>${label}</span></label>`
+    ).join('');
+
+    // Stage exclusion checkboxes
+    const stagesHtml = STAGE_DEFINITIONS.map(sd =>
+      `<label class="toggle-row">
+        <input type="checkbox" id="ts-${sd.key}" ${excluded.includes(sd.key) ? '' : 'checked'}>
+        <span style="display:flex;align-items:center;gap:6px">
+          <b style="width:8px;height:8px;min-width:8px;min-height:8px;border-radius:50%;background:${sd.color};display:inline-block"></b>
+          ${sd.icon} ${sd.name}${sd.optional ? ' <em style="font-size:10px;color:var(--text-muted)">(opcional)</em>' : ''}
+        </span>
+      </label>`
     ).join('');
 
     UI.openModal(isNew ? 'Novo Template PDF' : `Editar: ${t.name}`, `
@@ -978,20 +1176,25 @@ const App = {
         <label class="form-label">Nome do Template</label>
         <input type="text" class="form-input" id="tpl-name" value="${t.name}" placeholder="Ex: Relatório Completo">
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:16px">
         <div>
-          <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text-primary)">📊 Cards do Cabeçalho</div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text-primary)">📊 Cabeçalho</div>
           <div class="toggle-list">${headerHtml}</div>
         </div>
         <div>
-          <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text-primary)">📋 Colunas da Tabela</div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text-primary)">📋 Colunas</div>
           <div class="toggle-list">${columnsHtml}</div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text-primary)">🏷️ Etapas no PDF</div>
+          <p style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Desmarque para ocultar uma etapa do relatório.</p>
+          <div class="toggle-list">${stagesHtml}</div>
         </div>
       </div>
     `, `
       <button class="btn btn-secondary" onclick="UI.closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="App.saveTemplate('${t.id}', ${isNew})">Salvar Template</button>
-    `);
+    `, { maxWidth: '780px' });
   },
 
   saveTemplate(id, isNew) {
@@ -999,20 +1202,24 @@ const App = {
     if (!name) return UI.toast('Dê um nome ao template', 'warning');
 
     const columns = {};
-    ['etapa', 'status', 'inicio', 'prazo', 'conclusao', 'responsavel', 'aprovacaoCliente', 'anotacoes'].forEach(k => {
+    ['etapa', 'status', 'inicio', 'prazo', 'conclusao', 'diasUteis', 'responsavel', 'aprovacaoCliente', 'anotacoes'].forEach(k => {
       columns[k] = document.getElementById('tc-' + k)?.checked || false;
     });
     const header = {};
     ['showClient', 'showContractDate', 'showStatus', 'showProgress', 'showClientDays', 'showSkipped', 'showProjectNotes', 'showFooter'].forEach(k => {
       header[k] = document.getElementById('th-' + k)?.checked || false;
     });
+    // Stages that are UNchecked = excluded
+    const excludedStages = STAGE_DEFINITIONS
+      .filter(sd => !document.getElementById(`ts-${sd.key}`)?.checked)
+      .map(sd => sd.key);
 
     const templates = this._getTemplates();
     if (isNew) {
-      templates.push({ id, name, header, columns });
+      templates.push({ id, name, header, columns, excludedStages });
     } else {
       const idx = templates.findIndex(x => x.id === id);
-      if (idx >= 0) templates[idx] = { ...templates[idx], name, header, columns };
+      if (idx >= 0) templates[idx] = { ...templates[idx], name, header, columns, excludedStages };
     }
     this._saveTemplates(templates);
     UI.closeModal();
@@ -1090,16 +1297,27 @@ const App = {
 
           <div class="form-group">
             <label class="form-label">Logo</label>
-            <select class="form-select mb-16" id="sys-logo-type" onchange="document.getElementById('sys-logo-url-group').style.display=this.value==='url'?'block':'none';document.getElementById('sys-logo-icon-group').style.display=this.value==='icon'?'block':'none'">
+            <select class="form-select mb-16" id="sys-logo-type" onchange="
+              document.getElementById('sys-logo-url-group').style.display=this.value==='url'?'block':'none';
+              document.getElementById('sys-logo-icon-group').style.display=this.value==='icon'?'block':'none';
+              document.getElementById('sys-logo-upload-group').style.display=this.value==='upload'?'block':'none';
+            ">
               <option value="icon" ${sys.logoType === 'icon' ? 'selected' : ''}>Ícone (Letra)</option>
               <option value="url" ${sys.logoType === 'url' ? 'selected' : ''}>Imagem (URL)</option>
+              <option value="upload" ${sys.logoType === 'upload' ? 'selected' : ''}>Imagem (Upload)</option>
             </select>
-            
+
             <div id="sys-logo-url-group" style="display:${sys.logoType === 'url' ? 'block' : 'none'}">
-              <input type="text" class="form-input" id="sys-logo-url" value="${sys.logoUrl}" placeholder="https://exemplo.com/logo.png">
+              <input type="text" class="form-input" id="sys-logo-url" value="${sys.logoUrl || ''}" placeholder="https://exemplo.com/logo.png">
             </div>
             <div id="sys-logo-icon-group" style="display:${sys.logoType === 'icon' ? 'block' : 'none'}">
               <input type="text" class="form-input" id="sys-logo-icon" value="${sys.logoIcon}" placeholder="G" maxlength="2">
+            </div>
+            <div id="sys-logo-upload-group" style="display:${sys.logoType === 'upload' ? 'block' : 'none'}">
+              ${sys.logoUploadData ? `<img id="sys-logo-preview" src="${sys.logoUploadData}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;margin-bottom:10px;display:block">` : '<img id="sys-logo-preview" style="display:none;width:48px;height:48px;border-radius:8px;object-fit:cover;margin-bottom:10px">'}
+              <input type="file" id="sys-logo-file" accept="image/*" style="display:none" onchange="App.uploadLogo(this.files[0])">
+              <button id="sys-logo-upload-btn" class="btn btn-secondary" style="font-size:12px" onclick="document.getElementById('sys-logo-file').click()">📁 Escolher imagem</button>
+              <p class="text-muted" style="font-size:11px;margin-top:6px">Máximo 500 KB · PNG, JPG, SVG, WebP · Salvo no servidor.</p>
             </div>
           </div>
 
@@ -1173,13 +1391,45 @@ const App = {
     `);
   },
 
+  async uploadLogo(file) {
+    if (!file) return;
+    if (file.size > 500000) {
+      UI.toast('Imagem muito grande. Use uma imagem menor que 500 KB.', 'error');
+      return;
+    }
+    const btn = document.getElementById('sys-logo-upload-btn');
+    if (btn) { btn.textContent = '⏳ Enviando...'; btn.disabled = true; }
+    try {
+      const { url, path } = await LogoStore.upload(file);
+      window.__logoUploadData = url;
+      window.__logoUploadPath = path;
+
+      // Update preview
+      const prev = document.getElementById('sys-logo-preview');
+      if (prev) { prev.src = url; prev.style.display = 'block'; }
+
+      if (btn) { btn.textContent = '✅ Enviada! Salve para confirmar.'; btn.disabled = false; }
+      UI.toast('Logo carregado! Clique em Salvar Personalização.', 'success');
+    } catch (e) {
+      if (btn) { btn.textContent = '📁 Escolher imagem'; btn.disabled = false; }
+      UI.toast('Erro ao enviar logo: ' + e.message, 'error');
+    }
+  },
+
   saveSystemSettings() {
+    const sys = SystemStore.get();
     const settings = {
       name: document.getElementById('sys-name').value.trim() || 'Gestão de Projetos',
       subtitle: document.getElementById('sys-subtitle').value.trim(),
       logoType: document.getElementById('sys-logo-type').value,
       logoUrl: document.getElementById('sys-logo-url').value.trim(),
       logoIcon: document.getElementById('sys-logo-icon').value.trim() || 'G',
+      logoUploadData: document.getElementById('sys-logo-type').value === 'upload'
+        ? (window.__logoUploadData || sys.logoUploadData || null)
+        : (sys.logoUploadData || null),
+      logoUploadPath: document.getElementById('sys-logo-type').value === 'upload'
+        ? (window.__logoUploadPath || sys.logoUploadPath || null)
+        : (sys.logoUploadPath || null),
       primaryColor: document.getElementById('sys-primary').value,
       secondaryColor: document.getElementById('sys-secondary').value,
       theme: document.getElementById('sys-theme').value

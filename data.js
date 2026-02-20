@@ -3,13 +3,43 @@
    ========================================== */
 
 const STAGE_DEFINITIONS = [
-  { key: 'negotiation', name: 'Negociação', color: '#f59e0b', icon: '🤝', order: 0 },
-  { key: 'kickoff', name: 'Kick-off', color: '#f97316', icon: '🚀', order: 1 },
-  { key: 'copywriter', name: 'Copywriter', color: '#ec4899', icon: '✍️', order: 2, optional: true },
-  { key: 'design', name: 'Design', color: '#8b5cf6', icon: '🎨', order: 3 },
-  { key: 'development', name: 'Desenvolvimento', color: '#3b82f6', icon: '💻', order: 4 },
-  { key: 'golive', name: 'Go-live', color: '#10b981', icon: '🌐', order: 5 }
+  { key: 'negotiation', name: 'Negociação', color: '#f59e0b', icon: '🤝', order: 0, business_days: null },
+  { key: 'kickoff', name: 'Kick-off', color: '#f97316', icon: '🚀', order: 1, business_days: 5 },
+  { key: 'copywriter', name: 'Copywriter', color: '#ec4899', icon: '✍️', order: 2, business_days: 15, optional: true },
+  { key: 'design', name: 'Design', color: '#8b5cf6', icon: '🎨', order: 3, business_days: 25 },
+  { key: 'development', name: 'Desenvolvimento', color: '#3b82f6', icon: '💻', order: 4, business_days: 20 },
+  { key: 'golive', name: 'Go-live', color: '#10b981', icon: '🌐', order: 5, business_days: 7 }
 ];
+
+// Utility: add N business days (Mon–Fri) to a Date, returns new Date
+function addBusinessDays(startDate, days) {
+  const date = new Date(startDate);
+  let added = 0;
+  while (added < days) {
+    date.setDate(date.getDate() + 1);
+    const dow = date.getDay();
+    if (dow !== 0 && dow !== 6) added++; // skip Sun(0) and Sat(6)
+  }
+  return date;
+}
+
+// Utility: count business days between two dates (inclusive start, inclusive end)
+function countBusinessDays(start, end) {
+  const s = new Date(start), e = new Date(end);
+  let count = 0;
+  const cur = new Date(s);
+  while (cur <= e) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
+// Format date string (YYYY-MM-DD) to Date object, then to ISO yyyy-mm-dd
+function toISODate(date) {
+  return date.toISOString().slice(0, 10);
+}
 
 const STATUS_LABELS = {
   active: 'Ativo', completed: 'Concluído', paused: 'Pausado', cancelled: 'Cancelado',
@@ -292,9 +322,11 @@ const SystemStore = {
   defaults: {
     name: 'Gestão de Projetos',
     subtitle: 'Gerenciador de Sites',
-    logoType: 'icon', // 'icon' or 'url'
+    logoType: 'icon', // 'icon', 'url', or 'upload'
     logoUrl: '',
     logoIcon: 'G',
+    logoUploadData: null,  // public URL mirrored from Supabase Storage
+    logoUploadPath: null,  // storage file path for deletion
     primaryColor: '#8b5cf6',
     secondaryColor: '#06b6d4',
     theme: 'dark'
@@ -308,6 +340,53 @@ const SystemStore = {
   save(settings) {
     localStorage.setItem('system_settings', JSON.stringify(settings));
     return settings;
+  }
+};
+
+/* --- APP SETTINGS (Supabase-backed key/value) --- */
+const AppSettingsStore = {
+  async get(key) {
+    try {
+      const { data, error } = await sb().from('app_settings').select('value').eq('key', key).single();
+      if (error || !data) return null;
+      return data.value;
+    } catch (e) { return null; }
+  },
+  async set(key, value) {
+    const { error } = await sb().from('app_settings')
+      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if (error) throw error;
+  }
+};
+
+/* --- LOGO STORAGE (Supabase Storage bucket: app-logos) --- */
+const LogoStore = {
+  BUCKET: 'app-logos',
+
+  async upload(file) {
+    // Get old path to delete after successful upload
+    const sys = SystemStore.get();
+    const oldPath = sys.logoUploadPath || null;
+
+    // Unique filename
+    const ext = file.name.split('.').pop().toLowerCase();
+    const fileName = `logo-${Date.now()}.${ext}`;
+
+    // Upload new file
+    const { error: upErr } = await sb().storage
+      .from(this.BUCKET)
+      .upload(fileName, file, { cacheControl: '3600', upsert: false });
+    if (upErr) throw upErr;
+
+    // Get public URL
+    const { data: { publicUrl } } = sb().storage.from(this.BUCKET).getPublicUrl(fileName);
+
+    // Delete old file (best-effort, don't block on failure)
+    if (oldPath) {
+      sb().storage.from(this.BUCKET).remove([oldPath]).catch(() => { });
+    }
+
+    return { url: publicUrl, path: fileName };
   }
 };
 
