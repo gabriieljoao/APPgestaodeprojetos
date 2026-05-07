@@ -807,7 +807,43 @@ const App = {
     try {
       const reviewStart = document.getElementById('cr-start')?.value || null;
       const reviewEnd = document.getElementById('cr-end')?.value || null;
-      await StageStore.update(stageId, { client_review_start: reviewStart, client_review_end: reviewEnd });
+      
+      const stages = this.cache._currentStages || [];
+      const stageIndex = stages.findIndex(s => s.id === stageId);
+      
+      if (stageIndex !== -1) {
+        const oldStage = stages[stageIndex];
+        const oldDays = (oldStage.client_review_start && oldStage.client_review_end) 
+          ? countBusinessDays(oldStage.client_review_start, oldStage.client_review_end) : 0;
+        const newDays = (reviewStart && reviewEnd) 
+          ? countBusinessDays(reviewStart, reviewEnd) : 0;
+        
+        const deltaDays = newDays - oldDays;
+        
+        await StageStore.update(stageId, { client_review_start: reviewStart, client_review_end: reviewEnd });
+        
+        if (deltaDays !== 0) {
+          const updates = [];
+          for (let i = stageIndex; i < stages.length; i++) {
+            const s = stages[i];
+            const up = {};
+            if (i === stageIndex) {
+              if (s.deadline) up.deadline = toISODate(addBusinessDays(s.deadline, deltaDays));
+            } else {
+              if (s.start_date) up.start_date = toISODate(addBusinessDays(s.start_date, deltaDays));
+              if (s.deadline) up.deadline = toISODate(addBusinessDays(s.deadline, deltaDays));
+            }
+            if (Object.keys(up).length > 0) {
+              updates.push(StageStore.update(s.id, up));
+            }
+          }
+          if (updates.length > 0) await Promise.all(updates);
+          UI.toast(`Cronograma ajustado em ${deltaDays > 0 ? '+' : ''}${deltaDays} dia(s) devido à revisão do cliente.`, 'info');
+        }
+      } else {
+        await StageStore.update(stageId, { client_review_start: reviewStart, client_review_end: reviewEnd });
+      }
+
       UI.closeModal();
       UI.toast('Aprovação atualizada!', 'success');
       this.invalidateCache();

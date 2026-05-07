@@ -11,14 +11,16 @@ const STAGE_DEFINITIONS = [
   { key: 'golive', name: 'Go-live', color: '#10b981', icon: '🌐', order: 5, business_days: 7 }
 ];
 
-// Utility: add N business days (Mon–Fri) to a Date, returns new Date
+// Utility: add/subtract N business days (Mon–Fri) to a Date, returns new Date
 function addBusinessDays(startDate, days) {
   const date = new Date(startDate);
-  let added = 0;
-  while (added < days) {
-    date.setDate(date.getDate() + 1);
+  if (!days) return date;
+  const direction = days > 0 ? 1 : -1;
+  let remaining = Math.abs(days);
+  while (remaining > 0) {
+    date.setDate(date.getDate() + direction);
     const dow = date.getDay();
-    if (dow !== 0 && dow !== 6) added++; // skip Sun(0) and Sat(6)
+    if (dow !== 0 && dow !== 6) remaining--;
   }
   return date;
 }
