@@ -723,7 +723,7 @@ const App = {
       '</style></head><body>' +
       '<div class="toolbar"><span style="color:#fff;font-size:13px;font-weight:600">📄 Extrato — ' + tpl.name + '</span><div style="display:flex;gap:8px"><button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button><button class="btn-close" onclick="window.close()">Fechar</button></div></div>' +
       '<div class="report">' +
-      '<div class="header"><h1>' + project.name + '</h1>' + (subtitleParts.length > 0 ? '<div class="subtitle">' + subtitleParts.join(' · ') + '</div>' : '') + '</div>' +
+      '<div class="header"><h1>' + project.client + ' - ' + project.name + '</h1>' + (subtitleParts.length > 0 ? '<div class="subtitle">' + subtitleParts.join(' · ') + '</div>' : '') + '</div>' +
       (infoCards.length > 0 ? '<div class="info-grid">' + infoCards.join('') + '</div>' : '') +
       (activeCols.length > 0 ? '<div class="section-title">📋 Detalhamento por Etapa</div><table><thead><tr>' + theadHtml + '</tr></thead><tbody>' + tbodyHtml + '</tbody></table>' : '') +
       (hdr.showProjectNotes !== false && project.notes ? '<div class="section-title">📝 Observações do Projeto</div><p style="font-size:12px;color:#4b5563;line-height:1.6;margin-bottom:20px">' + project.notes + '</p>' : '') +
