@@ -88,6 +88,7 @@ const UI = {
 
     return `
     <div class="sidebar ${collapsed ? 'collapsed' : ''}" id="sidebar">
+      <button class="mobile-close-btn btn-icon" onclick="document.getElementById('sidebar').classList.remove('open')">✕</button>
       <div class="sidebar-logo">
         ${logoHtml}
         <div class="logo-text">
@@ -137,7 +138,8 @@ const UI = {
       <div class="sidebar-footer">
         <div style="font-size:11px;color:var(--text-muted)">📅 ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
       </div>
-    </div>`;
+    </div>
+    <div class="sidebar-backdrop" onclick="document.getElementById('sidebar').classList.remove('open')"></div>`;
   },
 
   toggleSidebar() {

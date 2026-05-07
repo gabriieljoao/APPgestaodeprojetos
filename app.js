@@ -84,7 +84,12 @@ const App = {
         ${UI.renderSidebar(this.currentRoute, alertCount, this.cache.systemSettings, LogStore.getAll(), this.cache.projects || [])}
         <div class="main-area">
           <div class="main-header">
-            <h2>${pageTitle}</h2>
+            <div style="display:flex;align-items:center;gap:12px">
+              <button class="btn btn-ghost btn-icon mobile-menu-btn" onclick="document.getElementById('sidebar').classList.add('open')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+              </button>
+              <h2>${pageTitle}</h2>
+            </div>
             <div class="header-actions">
               ${headerActions}
               <div class="notif-bell-wrapper" style="position:relative">
@@ -109,7 +114,12 @@ const App = {
         ${UI.renderSidebar(this.currentRoute, alertCount, this.cache.systemSettings, LogStore.getAll(), this.cache.projects || [])}
         <div class="main-area">
           <div class="main-header">
-            <h2>${pageTitle}</h2>
+            <div style="display:flex;align-items:center;gap:12px">
+              <button class="btn btn-ghost btn-icon mobile-menu-btn" onclick="document.getElementById('sidebar').classList.add('open')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+              </button>
+              <h2>${pageTitle}</h2>
+            </div>
             <div class="header-actions">
               ${headerActions}
               <div class="notif-bell-wrapper" style="position:relative">
