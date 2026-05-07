@@ -705,7 +705,7 @@ const App = {
       '.toolbar .btn-close { background:#374151; color:#fff; }' +
       '.report { max-width:960px; margin:0 auto; padding:32px; }' +
       '.header { text-align:center; padding:24px 0 20px; border-bottom:2px solid #e5e7eb; margin-bottom:24px; }' +
-      '.header h1 { font-size:22px; font-weight:800; background:linear-gradient(135deg,#8b5cf6,#6366f1); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }' +
+      '.header h1 { font-size:22px; font-weight:800; color:#1f2937; }' +
       '.header .subtitle { font-size:13px; color:#6b7280; margin-top:6px; }' +
       '.info-grid { display:grid; grid-template-columns:repeat(' + gridCols + ',1fr); gap:12px; margin-bottom:24px; }' +
       '.info-box { background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:12px 16px; text-align:center; }' +
@@ -719,11 +719,11 @@ const App = {
       'tr:hover { background:#fafafa; }' +
       '.status-badge { display:inline-block; padding:3px 8px; border-radius:4px; font-size:10px; font-weight:600; }' +
       '.footer { margin-top:32px; padding-top:16px; border-top:1px solid #e5e7eb; text-align:center; font-size:11px; color:#9ca3af; }' +
-      '@media print { .toolbar { display:none !important; } body { background:#fff; } .report { padding:16px; max-width:100%; } @page { margin:10mm 12mm; size:landscape; } table { page-break-inside:auto; } tr { page-break-inside:avoid; } }' +
+      '@media print { .toolbar { display:none !important; } body { background:#fff; } .report { padding:16px; max-width:100%; } @page { margin:10mm 12mm; size:landscape; } table { page-break-inside:auto; } tr { page-break-inside:avoid; } .header h1 { color: #1f2937 !important; } }' +
       '</style></head><body>' +
       '<div class="toolbar"><span style="color:#fff;font-size:13px;font-weight:600">📄 Extrato — ' + tpl.name + '</span><div style="display:flex;gap:8px"><button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button><button class="btn-close" onclick="window.close()">Fechar</button></div></div>' +
       '<div class="report">' +
-      '<div class="header"><h1>' + project.client + ' - ' + project.name + '</h1>' + (subtitleParts.length > 0 ? '<div class="subtitle">' + subtitleParts.join(' · ') + '</div>' : '') + '</div>' +
+      '<div class="header"><h1>' + project.name + '</h1>' + (subtitleParts.length > 0 ? '<div class="subtitle">' + subtitleParts.join(' · ') + '</div>' : '') + '</div>' +
       (infoCards.length > 0 ? '<div class="info-grid">' + infoCards.join('') + '</div>' : '') +
       (activeCols.length > 0 ? '<div class="section-title">📋 Detalhamento por Etapa</div><table><thead><tr>' + theadHtml + '</tr></thead><tbody>' + tbodyHtml + '</tbody></table>' : '') +
       (hdr.showProjectNotes !== false && project.notes ? '<div class="section-title">📝 Observações do Projeto</div><p style="font-size:12px;color:#4b5563;line-height:1.6;margin-bottom:20px">' + project.notes + '</p>' : '') +
