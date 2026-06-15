@@ -55,7 +55,7 @@ const App = {
       else await this.pageDashboard();
     } catch (err) {
       console.error('Route error:', err);
-      document.getElementById('app').innerHTML = `<div class="setup-screen"><div class="setup-card"><h2>Erro</h2><p>${err.message}</p><button class="btn btn-primary mt-16" onclick="App.navigate('/')">Voltar</button></div></div>`;
+      document.getElementById('app').innerHTML = `<div class="setup-screen"><div class="setup-card"><h2>Erro</h2><p>${err.message}</p><div style="display:flex;gap:8px;justify-content:center;margin-top:16px"><button class="btn btn-primary" onclick="App.navigate('/')">Tentar Novamente</button><button class="btn btn-secondary" onclick="localStorage.removeItem('supabase_vault'); localStorage.removeItem('supabase_config'); window.location.reload()">Resetar Conexão</button></div></div></div>`;
     }
   },
 
@@ -195,6 +195,7 @@ const App = {
       } catch (e) {
         UI.toast('Erro ao conectar. Verifique as credenciais e o SQL.', 'error');
         localStorage.removeItem('supabase_config');
+        localStorage.removeItem('supabase_vault');
       }
     }
   },
