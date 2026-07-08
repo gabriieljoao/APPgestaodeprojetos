@@ -699,8 +699,67 @@ const App = {
     const activeCols = colDefs.filter(c => cols[c.key]);
 
     const theadHtml = activeCols.map(c => '<th>' + c.label + '</th>').join('');
-    const tbodyHtml = visibleStages.map(s => {
-      const def = STAGE_DEFINITIONS.find(d => d.key === s.stage_key);
+    let finalStagesForPdf = visibleStages;
+    let getDef = (key) => getStageDefinition(key);
+
+    if (hdr.showMacro) {
+      const macroGroups = [
+        { id: 'macro_comercial', name: 'Comercial', icon: '🤝', color: '#f59e0b', keys: ['negotiation', 'kickoff'] },
+        { id: 'macro_wireframe', name: 'Wireframe', icon: '📐', color: '#6366f1', keys: ['copywriter', 'wireframe'] },
+        { id: 'macro_design_prog', name: 'Design + Programação', icon: '💻', color: '#8b5cf6', keys: ['design', 'development'] },
+        { id: 'macro_golive', name: 'Go-live', icon: '🌐', color: '#10b981', keys: ['golive'] }
+      ];
+
+      finalStagesForPdf = [];
+      const macroDefs = {};
+
+      macroGroups.forEach(group => {
+        const groupStages = visibleStages.filter(s => group.keys.includes(s.stage_key));
+        if (groupStages.length === 0) return;
+
+        const starts = groupStages.map(s => s.start_date).filter(Boolean).sort();
+        const deadlines = groupStages.map(s => s.deadline).filter(Boolean).sort();
+        const completes = groupStages.map(s => s.completed_date).filter(Boolean).sort();
+        const clientStarts = groupStages.map(s => s.client_review_start).filter(Boolean).sort();
+        const clientEnds = groupStages.map(s => s.client_review_end).filter(Boolean).sort();
+
+        let totalBusinessDays = 0;
+        groupStages.forEach(s => {
+           const d = getStageDefinition(s.stage_key);
+           totalBusinessDays += (d && d.business_days) || 0;
+        });
+
+        let mStatus = 'pending';
+        if (groupStages.every(s => s.status === 'completed')) mStatus = 'completed';
+        else if (groupStages.some(s => s.status === 'in_progress')) mStatus = 'in_progress';
+        else if (groupStages.some(s => s.status === 'completed')) mStatus = 'in_progress';
+
+        finalStagesForPdf.push({
+          stage_key: group.id,
+          status: mStatus,
+          start_date: starts.length > 0 ? starts[0] : null,
+          deadline: deadlines.length > 0 ? deadlines[deadlines.length - 1] : null,
+          completed_date: completes.length > 0 ? completes[completes.length - 1] : null,
+          client_review_start: clientStarts.length > 0 ? clientStarts[0] : null,
+          client_review_end: clientEnds.length > 0 ? clientEnds[clientEnds.length - 1] : null,
+          assigned_persona_id: null,
+          notes: groupStages.map(s => s.notes).filter(Boolean).join(' | ') || null
+        });
+
+        macroDefs[group.id] = {
+           key: group.id,
+           name: group.name,
+           icon: group.icon,
+           color: group.color,
+           business_days: totalBusinessDays
+        };
+      });
+
+      getDef = (key) => macroDefs[key];
+    }
+
+    const tbodyHtml = finalStagesForPdf.map(s => {
+      const def = getDef(s.stage_key) || getStageDefinition(s.stage_key);
       if (!def) return '';
       return '<tr>' + activeCols.map(c => '<td>' + c.fn(s, def) + '</td>').join('') + '</tr>';
     }).join('');
@@ -1117,7 +1176,7 @@ const App = {
     return {
       id: Date.now().toString(),
       name: 'Template Padrão',
-      header: { showClient: true, showContractDate: true, showStatus: true, showProgress: true, showClientDays: true, showSkipped: true, showProjectNotes: true, showFooter: true },
+      header: { showClient: true, showContractDate: true, showStatus: true, showProgress: true, showClientDays: true, showSkipped: true, showProjectNotes: true, showFooter: true, showMacro: false },
       columns: { etapa: true, status: true, inicio: true, prazo: true, conclusao: true, diasUteis: true, responsavel: true, aprovacaoCliente: true, anotacoes: true },
       excludedStages: []
     };
@@ -1131,7 +1190,7 @@ const App = {
     }
 
     const columnsLabels = { etapa: 'Etapa', status: 'Status', inicio: 'Início', prazo: 'Prazo', conclusao: 'Conclusão', diasUteis: 'Dias Úteis', responsavel: 'Responsável', aprovacaoCliente: 'Aprovação Cliente', anotacoes: 'Anotações' };
-    const headerLabels = { showClient: 'Cliente', showContractDate: 'Data de Contrato', showStatus: 'Status do Projeto', showProgress: 'Progresso', showClientDays: 'Dias com Cliente', showSkipped: 'Etapas Puladas', showProjectNotes: 'Observações do Projeto', showFooter: 'Rodapé' };
+    const headerLabels = { showClient: 'Cliente', showContractDate: 'Data de Contrato', showStatus: 'Status do Projeto', showProgress: 'Progresso', showClientDays: 'Dias com Cliente', showSkipped: 'Etapas Puladas', showProjectNotes: 'Observações do Projeto', showFooter: 'Rodapé', showMacro: 'Visão Macro (Agrupar Etapas)' };
 
     const cardsHtml = templates.map(t => {
       const enabledCols = Object.entries(t.columns || {}).filter(([, v]) => v).map(([k]) => columnsLabels[k] || k);
@@ -1195,7 +1254,7 @@ const App = {
 
   _openTemplateEditor(t, isNew) {
     const columnsLabels = { etapa: 'Etapa', status: 'Status', inicio: 'Data de Início', prazo: 'Prazo / Deadline', conclusao: 'Data de Conclusão', diasUteis: 'Dias Úteis', responsavel: 'Responsável', aprovacaoCliente: 'Aprovação do Cliente', anotacoes: 'Anotações' };
-    const headerLabels = { showClient: 'Nome do Cliente', showContractDate: 'Data de Contrato', showStatus: 'Status do Projeto', showProgress: 'Card de Progresso', showClientDays: 'Card Dias com Cliente', showSkipped: 'Card Etapas Puladas', showProjectNotes: 'Observações do Projeto', showFooter: 'Rodapé do Relatório' };
+    const headerLabels = { showClient: 'Nome do Cliente', showContractDate: 'Data de Contrato', showStatus: 'Status do Projeto', showProgress: 'Card de Progresso', showClientDays: 'Card Dias com Cliente', showSkipped: 'Card Etapas Puladas', showProjectNotes: 'Observações do Projeto', showFooter: 'Rodapé do Relatório', showMacro: 'Visão Macro (Agrupar Etapas)' };
 
     const excluded = t.excludedStages || [];
 
@@ -1253,7 +1312,7 @@ const App = {
       columns[k] = document.getElementById('tc-' + k)?.checked || false;
     });
     const header = {};
-    ['showClient', 'showContractDate', 'showStatus', 'showProgress', 'showClientDays', 'showSkipped', 'showProjectNotes', 'showFooter'].forEach(k => {
+    ['showClient', 'showContractDate', 'showStatus', 'showProgress', 'showClientDays', 'showSkipped', 'showProjectNotes', 'showFooter', 'showMacro'].forEach(k => {
       header[k] = document.getElementById('th-' + k)?.checked || false;
     });
     // Stages that are UNchecked = excluded

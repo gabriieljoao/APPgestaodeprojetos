@@ -3,12 +3,16 @@
    ========================================== */
 
 const STAGE_DEFINITIONS = [
-  { key: 'negotiation', name: 'Negociação', color: '#f59e0b', icon: '🤝', order: 0, business_days: null },
-  { key: 'kickoff', name: 'Kick-off', color: '#f97316', icon: '🚀', order: 1, business_days: 5 },
-  { key: 'copywriter', name: 'Copywriter', color: '#ec4899', icon: '✍️', order: 2, business_days: 15, optional: true },
-  { key: 'design', name: 'Design', color: '#8b5cf6', icon: '🎨', order: 3, business_days: 25 },
-  { key: 'development', name: 'Desenvolvimento', color: '#3b82f6', icon: '💻', order: 4, business_days: 20 },
+  { key: 'kickoff', name: 'Kick-off', color: '#f97316', icon: '🚀', order: 0, business_days: 5 },
+  { key: 'copywriter', name: 'Copywriter', color: '#ec4899', icon: '✍️', order: 1, business_days: 15, optional: true },
+  { key: 'wireframe', name: 'Wireframe', color: '#6366f1', icon: '📐', order: 2, business_days: 10 },
+  { key: 'design', name: 'Design', color: '#8b5cf6', icon: '🎨', order: 3, business_days: 15 },
+  { key: 'development', name: 'Programação', color: '#3b82f6', icon: '💻', order: 4, business_days: 20 },
   { key: 'golive', name: 'Go-live', color: '#10b981', icon: '🌐', order: 5, business_days: 7 }
+];
+
+const LEGACY_STAGE_DEFINITIONS = [
+  { key: 'negotiation', name: 'Negociação', color: '#f59e0b', icon: '🤝', order: -1, business_days: null }
 ];
 
 // Utility: add/subtract N business days (Mon–Fri) to a Date, returns new Date
@@ -272,7 +276,7 @@ const AlertStore = {
 
 // --- HELPERS ---
 function getStageDefinition(key) {
-  return STAGE_DEFINITIONS.find(s => s.key === key);
+  return STAGE_DEFINITIONS.find(s => s.key === key) || LEGACY_STAGE_DEFINITIONS.find(s => s.key === key);
 }
 
 function getProjectProgress(stages) {
