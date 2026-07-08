@@ -30,7 +30,7 @@ CREATE TABLE projects (
 CREATE TABLE project_stages (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  stage_key TEXT NOT NULL CHECK (stage_key IN ('negotiation', 'kickoff', 'copywriter', 'design', 'development', 'golive')),
+  stage_key TEXT NOT NULL CHECK (stage_key IN ('negotiation', 'kickoff', 'copywriter', 'wireframe', 'design', 'development', 'golive')),
   assigned_persona_id UUID REFERENCES personas(id) ON DELETE SET NULL,
   start_date DATE,
   deadline DATE,

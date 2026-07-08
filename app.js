@@ -719,7 +719,12 @@ const App = {
 
         const starts = groupStages.map(s => s.start_date).filter(Boolean).sort();
         const deadlines = groupStages.map(s => s.deadline).filter(Boolean).sort();
-        const completes = groupStages.map(s => s.completed_date).filter(Boolean).sort();
+        
+        // Find the final sub-stage logically (the one defined last in the group keys)
+        const lastKeyInGroup = group.keys.slice().reverse().find(k => groupStages.some(s => s.stage_key === k));
+        const finalStageInGroup = groupStages.find(s => s.stage_key === lastKeyInGroup);
+        const macroCompletedDate = finalStageInGroup ? finalStageInGroup.completed_date : null;
+
         const clientStarts = groupStages.map(s => s.client_review_start).filter(Boolean).sort();
         const clientEnds = groupStages.map(s => s.client_review_end).filter(Boolean).sort();
 
@@ -739,7 +744,7 @@ const App = {
           status: mStatus,
           start_date: starts.length > 0 ? starts[0] : null,
           deadline: deadlines.length > 0 ? deadlines[deadlines.length - 1] : null,
-          completed_date: completes.length > 0 ? completes[completes.length - 1] : null,
+          completed_date: macroCompletedDate,
           client_review_start: clientStarts.length > 0 ? clientStarts[0] : null,
           client_review_end: clientEnds.length > 0 ? clientEnds[clientEnds.length - 1] : null,
           assigned_persona_id: null,
